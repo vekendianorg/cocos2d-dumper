@@ -23,9 +23,10 @@ compile_commands.json
 *.exp
 
 # ---- generated dumps: hundreds of MB, regenerate with `c2d emit` ----
+# Dumps are not source, so *.cs is ignored wholesale; the format reference
+# that used to live here as a 58 MB .c file is not carried in the repository.
 /output/
 *.cs
-!expected_dump_format_example.c
 
 # ---- sample binaries and memory dumps (never commit) ----
 *.bin

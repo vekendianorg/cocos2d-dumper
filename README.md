@@ -10,7 +10,6 @@ Inputs used for development and validation:
 |---|---|
 | `libcocos2dcpp_1.74.2.so` | 583 MB ELF64 AArch64 shared object with 500 MB of DWARF; 1183 units, 20,454,580 DIEs |
 | `com.fingersoft.hcr2-*.bin` | 34 MB memory dump of the same library, **stripped**: no `.debug_info`, and a section table full of dead pointers |
-| `expected_dump_format_example.c` | formatting reference only |
 | `dump_1.73.cs` | output of a commercial dumper on the previous version; the format this project reproduces |
 
 Nothing is assumed to exist in a binary because it appears in a reference dump.
