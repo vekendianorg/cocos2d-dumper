@@ -17,22 +17,45 @@ Nothing is assumed to exist in a binary because it appears in a reference dump.
 
 ## Building
 
-```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-ninja -C build
-```
-
-On Termux/PRoot, CMake's host detection calls `getprop`, which is unavailable,
-so pass the system explicitly:
+CMake 3.20+ and a C++20 compiler. No third-party dependencies.
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_VERSION=24
+cmake --preset release
+cmake --build --preset release
+ctest --preset default
 ```
 
-`scripts/build.sh` wraps this. Note that `/storage/emulated/0` (sdcardfs) does
-not carry the executable bit, so copy the binaries to a real filesystem
-(`cp build/c2d /tmp/c2d`) before running them.
+Or, on any POSIX shell:
+
+```sh
+sh scripts/build.sh
+sh scripts/test.sh
+```
+
+| Preset | Use |
+|---|---|
+| `release` / `debug` | Linux, macOS, MSVC, Ninja, MSYS2 — the normal case |
+| `termux` | Termux, native or proot (see below) |
+
+Windows: use a Developer Command Prompt with the Visual Studio generator, or
+Ninja from MSYS2.
+
+### Why the `termux` preset exists
+
+Under proot, CMake's host detection shells out to `getprop`, which does not
+exist, so it cannot determine the system version and aborts with
+`file failed to open for reading: /include/android/api-level.h`. Supplying
+`CMAKE_SYSTEM_NAME` and `CMAKE_SYSTEM_VERSION` skips that path. It is harmless
+on native Termux, so `scripts/build.sh` applies it automatically whenever it
+detects the Termux install prefix. `C2D_FORCE_TERMUX=0|1` overrides the
+detection.
+
+### Binaries
+
+Some filesystems — notably Android's `sdcardfs` — do not carry the executable
+bit, so a binary written there cannot be run in place. `scripts/build.sh`
+copies `c2d` and `c2d-tests` to `$C2D_RUN_DIR` (default `$TMPDIR/c2d-run`) and
+marks them executable.
 
 ## Usage
 
@@ -58,13 +81,13 @@ Bounding options keep exploration cheap on the 583 MB input:
 Examples:
 
 ```sh
-c2d info  libcocos2dcpp_1.74.2.so
-c2d scan  --max-units 20 --tags --stats libcocos2dcpp_1.74.2.so   # ~0.1 s
-c2d scan  --unit-stride 100 --stats libcocos2dcpp_1.74.2.so       # ~0.1 s
-c2d scan  --stats libcocos2dcpp_1.74.2.so                        # full scan
-c2d dump  --unit 0 --max-print 40 libcocos2dcpp_1.74.2.so
-c2d emit  --stats --name libcocos2dcpp_1.74.2.so        # -> output/dump.cs
-c2d emit  --stats -o /tmp/small.cs libcocos2dcpp_1.74.2.so
+c2d info  libfoo.so
+c2d scan  --max-units 20 --tags --stats libfoo.so    # bounded, ~0.1 s
+c2d scan  --unit-stride 100 --stats libfoo.so        # every 100th unit
+c2d scan  --stats libfoo.so                         # full scan
+c2d dump  --unit 0 --max-print 40 libfoo.so
+c2d emit  --stats libfoo.so                         # -> output/dump.cs
+sh scripts/emit.sh libfoo.so                        # same, via the helper
 ```
 
 The dump is written to `output/dump.cs` by default (that directory is
@@ -76,16 +99,26 @@ fields), `--no-methods`, `--max-lines`, `--build-units`, `--list-conflicts N`
 ## Testing
 
 ```sh
-./build/tests/c2d-tests            # fast suite: synthetic fixtures only
-ctest --test-dir build             # adds the opt-in real-binary test
+sh scripts/test.sh                 # 30 fast cases, synthetic fixtures only
+sh scripts/test.sh --real          # the opt-in real-binary cases
+ctest --preset default             # same, via CTest
 ```
 
-The default suite is fast and never touches the 583 MB file: it builds synthetic
-ELFs in memory (`tests/fixture_builder.*`) so that DWARF constructs the real
-target does *not* contain — DWARF64, DWARF 5 headers, `DW_FORM_implicit_const`,
-truncated and reserved headers — are still covered. Real-binary tests are skipped
-automatically when the input is absent and are registered as a separate CTest
-target so they are never run by accident.
+The default suite is fast and hermetic: it builds synthetic ELFs in memory
+(`tests/fixture_builder.*`), so DWARF constructs the real target does *not*
+contain — DWARF64, DWARF 5 headers, `DW_FORM_implicit_const`, truncated and
+reserved headers — are still covered without shipping a 583 MB sample.
+
+The real-binary cases need a large ELF and are **skipped unless you point at
+one**:
+
+```sh
+C2D_REAL_BINARY=/path/to/libcocos2dcpp_1.74.2.so sh scripts/test.sh --real
+```
+
+`C2D_REAL_BINARY` accepts a file or a directory containing it. There is
+deliberately no default path: a path baked into the repository would only be
+valid on one machine and would skip everywhere else for the wrong reason.
 
 ## Two modes
 
