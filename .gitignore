@@ -1,11 +1,13 @@
 # ---- build output ----
-build/
-build-*/
-cmake-build-*/
-out/
+# Anchored to the repository root: an unanchored "output/" would also match
+# src/output/ and silently drop the emitter from every commit.
+/build/
+/build-*/
+/cmake-build-*/
+/out/
 CMakeUserPresets.json
-CMakeCache.txt
-CMakeFiles/
+/CMakeCache.txt
+/CMakeFiles/
 compile_commands.json
 *.o
 *.obj
@@ -21,7 +23,7 @@ compile_commands.json
 *.exp
 
 # ---- generated dumps: hundreds of MB, regenerate with `c2d emit` ----
-output/
+/output/
 *.cs
 !expected_dump_format_example.c
 
