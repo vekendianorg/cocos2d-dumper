@@ -1,0 +1,40 @@
+# ---- build output ----
+build/
+build-*/
+cmake-build-*/
+out/
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+
+# ---- generated dumps: hundreds of MB, regenerate with `c2d emit` ----
+output/
+*.cs
+!expected_dump_format_example.c
+
+# ---- sample binaries and memory dumps (never commit) ----
+*.bin
+*.apk
+*.oat
+*.vdex
+
+# ---- editor / OS noise ----
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

@@ -1,0 +1,46 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug (Ninja)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (Ninja)",
+      "inherits": "base"
+    },
+    {
+      "name": "termux",
+      "displayName": "Termux (native or proot)",
+      "description": "On Termux, CMake's host detection calls getprop, which is unavailable under proot, so the system name and version are supplied explicitly. Harmless on native Termux too.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/termux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_SYSTEM_NAME": "Linux",
+        "CMAKE_SYSTEM_VERSION": "24"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "termux", "configurePreset": "termux" }
+  ],
+  "testPresets": [
+    { "name": "default", "configurePreset": "release", "output": { "outputOnFailure": true } },
+    { "name": "termux", "configurePreset": "termux", "output": { "outputOnFailure": true } }
+  ]
+}
