@@ -32,15 +32,23 @@
         "CMAKE_SYSTEM_NAME": "Linux",
         "CMAKE_SYSTEM_VERSION": "24"
       }
+    },
+    {
+      "name": "windows",
+      "displayName": "Windows (default Visual Studio generator)",
+      "description": "No generator is pinned on purpose. GitHub's windows-latest image moved to windows-2025, where the generator is 'Visual Studio 18 2025' rather than 'Visual Studio 17 2022'; naming a version breaks as soon as the image changes. Leaving it unset makes CMake pick the newest installed Visual Studio on whichever image is current. This preset deliberately does not inherit `base`, which pins Ninja. Multi-config, so build and test select the configuration with --config / -C.",
+      "binaryDir": "${sourceDir}/build/windows"
     }
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "debug" },
     { "name": "release", "configurePreset": "release" },
-    { "name": "termux", "configurePreset": "termux" }
+    { "name": "termux", "configurePreset": "termux" },
+    { "name": "windows", "configurePreset": "windows" }
   ],
   "testPresets": [
     { "name": "default", "configurePreset": "release", "output": { "outputOnFailure": true } },
-    { "name": "termux", "configurePreset": "termux", "output": { "outputOnFailure": true } }
+    { "name": "termux", "configurePreset": "termux", "output": { "outputOnFailure": true } },
+    { "name": "windows", "configurePreset": "windows", "output": { "outputOnFailure": true } }
   ]
 }
