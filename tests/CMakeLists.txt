@@ -6,6 +6,7 @@ add_executable(c2d-tests
   test_ir.cpp
   test_dwarfless.cpp
   test_normalize.cpp
+  test_progress.cpp
 )
 target_link_libraries(c2d-tests PRIVATE c2d)
 target_include_directories(c2d-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

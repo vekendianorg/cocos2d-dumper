@@ -19,6 +19,7 @@
 
 #include "c2d/diag/log.h"
 #include "c2d/diag/metrics.h"
+#include "c2d/diag/progress.h"
 #include "c2d/dwarf/constants.h"
 #include "c2d/dwarf/dwarf_context.h"
 #include "c2d/elf/elf_file.h"
@@ -63,6 +64,8 @@ struct Options {
   bool pad_layout = true;
   bool emit_methods = true;
   std::string mode = "auto";       // auto | dwarf | dwarfless
+  std::string progress_mode = "auto";  // auto | always | never
+  int progress_interval = 80;
   bool fail_on_low_confidence = false;
 };
 
@@ -116,6 +119,8 @@ void usage() {
       "  --name NAME        target name recorded in the dump header\n"
       "  --emit-bases       also emit a base-class comment per class\n"
       "  --mode M           auto (default) | dwarf | dwarfless\n"
+      "  --progress M       auto (default, when stderr is a tty) | always | never\n"
+      "  --progress-interval MS   minimum gap between redraws (default 80)\n"
       "  --fail-on-low-confidence  exit 3 when a dump is inferred, not DWARF\n"
       "  --no-pad           do not synthesise padding fields for layout gaps\n"
       "  --no-methods       do not emit member functions\n"
@@ -147,6 +152,7 @@ bool parse_args(int argc, char** argv, Options& o) {
   // Holds the value from a `--opt=value` form until the option consumes it.
   std::string pending_eq_value;
   bool has_pending_eq_value = false;
+  std::uint64_t tmp_interval = 0;
   int i = 1;
   o.command = argv[i++];
   if (o.command == "-h" || o.command == "--help") {
@@ -225,6 +231,19 @@ bool parse_args(int argc, char** argv, Options& o) {
       o.mode = m;
     } else if (a == "--fail-on-low-confidence") {
       o.fail_on_low_confidence = true;
+    } else if (a == "--progress") {
+      const char* v = need("--progress");
+      if (v == nullptr) return false;
+      const std::string m = v;
+      if (m != "auto" && m != "always" && m != "never") {
+        std::fprintf(stderr, "error: --progress must be auto, always or never\n");
+        return false;
+      }
+      o.progress_mode = m;
+    } else if (a == "--progress-interval") {
+      const char* v = need("--progress-interval");
+      if (v == nullptr || !parse_u64(v, tmp_interval) || tmp_interval > 10000) return false;
+      o.progress_interval = static_cast<int>(tmp_interval);
     } else if (a == "--no-pad") {
       o.pad_layout = false;
     } else if (a == "--no-methods") {
@@ -485,6 +504,40 @@ int cmd_dump(dwarf::DwarfContext& ctx, const Options& o) {
 }
 
 /// Builds the model and writes the C#-style dump.
+/// The completion summary.
+///
+/// Composed as a single string and printed through the reporter, which clears
+/// any status line first, so the output ends tidy whether or not progress was
+/// drawn.
+std::string summary_line(const char* mode, const std::string& path, double secs,
+                         const ir::BuildStats& bs, const ir::DwarflessStats& ds,
+                         const output::EmitStats& es) {
+  const auto num = [](std::uint64_t v) {
+    char d[24];
+    int n = std::snprintf(d, sizeof(d), "%llu", static_cast<unsigned long long>(v));
+    std::string out;
+    for (int i = 0; i < n; ++i) {
+      if (i != 0 && (n - i) % 3 == 0) out.push_back(',');
+      out.push_back(d[i]);
+    }
+    return out;
+  };
+  char buf[640];
+  const std::uint64_t units = bs.units != 0 ? bs.units : 0;
+  const std::uint64_t dies = bs.units != 0 ? bs.dies : ds.fdes;
+  const std::uint64_t types = bs.type_nodes;
+  const std::uint64_t fields = bs.fields;
+  const std::uint64_t methods = bs.methods;
+  const char* dies_label = bs.units != 0 ? "DIEs" : "FDEs";
+  std::snprintf(buf, sizeof(buf),
+                "c2d: done (%s) %s in %.1fs -- %s units, %s %s, %s types, %s fields, "
+                "%s methods -> %s lines, %s",
+                mode, path.c_str(), secs, num(units).c_str(), num(dies).c_str(), dies_label,
+                num(types).c_str(), num(fields).c_str(), num(methods).c_str(),
+                num(es.lines).c_str(), util::human_size(es.bytes).c_str());
+  return buf;
+}
+
 int cmd_emit(dwarf::DwarfContext& ctx, const Options& o, diag::Metrics& metrics) {
   // ---- choose a mode -------------------------------------------------------
   const bool have_dwarf = ctx.sections().has_info() && ctx.unit_count() != 0;
@@ -501,6 +554,7 @@ int cmd_emit(dwarf::DwarfContext& ctx, const Options& o, diag::Metrics& metrics)
     use_dwarfless = !have_dwarf;
   }
 
+  const auto t_emit_start = diag::Clock::now();
   ir::BuildStats bst;
   ir::DwarflessStats dst;
   const bool built = use_dwarfless
@@ -548,6 +602,10 @@ int cmd_emit(dwarf::DwarfContext& ctx, const Options& o, diag::Metrics& metrics)
   output::emit_il2cpp(metrics_model_, out, eopts, &est);
   const double emit_secs = diag::seconds_since(t_emit);
   std::fclose(out);
+
+  // The human-readable block below goes to stderr too, so the in-place status
+  // line has to go first.
+  diag::progress().clear_line();
 
   if (use_dwarfless) {
     // Loud, and on stderr, because stdout is the pipe and stderr is the
@@ -612,6 +670,9 @@ int cmd_emit(dwarf::DwarfContext& ctx, const Options& o, diag::Metrics& metrics)
                util::human_size(est.bytes).c_str(), emit_secs);
   std::fprintf(stderr, "wrote: %s\n", out_path.c_str());
 
+  diag::progress().finish_line(summary_line(use_dwarfless ? "dwarfless" : "dwarf", o.path,
+                                            diag::seconds_since(t_emit_start), bst, dst, est));
+
   metrics.add_phase("emit", emit_secs, est.lines, est.bytes);
   metrics.set_count("classes", metrics_model_.classes.size());
   metrics.set_count("enums", metrics_model_.enums.size());
@@ -646,6 +707,11 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "error: unknown log level '%s'\n", o.log_level.c_str());
     return 64;
   }
+
+  auto& pr = diag::progress();
+  pr.reset();
+  pr.configure(o.progress_mode == "always", o.progress_interval);
+  if (o.progress_mode == "never") pr.set_enabled(false);
 
   const auto t_start = diag::Clock::now();
   diag::Metrics metrics;

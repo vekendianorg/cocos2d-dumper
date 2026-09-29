@@ -65,6 +65,7 @@ add_library(c2d STATIC
   src/util/bytes.cpp
   src/diag/log.cpp
   src/diag/metrics.cpp
+  src/diag/progress.cpp
   src/elf/mapped_file.cpp
   src/elf/elf_file.cpp
   src/elf/phdr_recovery.cpp

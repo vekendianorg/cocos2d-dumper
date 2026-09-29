@@ -54,6 +54,30 @@ on native Termux, so `scripts/build.sh` applies it automatically whenever it
 detects the Termux install prefix. `C2D_FORCE_TERMUX=0|1` overrides the
 detection.
 
+### Progress
+
+Long stages update a single terminal line in place, so a multi-minute run never
+looks like a hang:
+
+```
+[ 24%] Units: 283/1,183 | DIEs: 4,900,000 | Types: 715,000 | Stage: DWARF
+[100%] Units: 1,183/1,183 | DIEs: 20,454,580 | Types: 2,984,000/2,984,000 | Lines: 6,383,926 | Stage: Writing dump
+c2d: done (dwarf) libfoo.so in 25.4s -- 1,183 units, 20,454,580 DIEs, ... -> 6,383,926 lines, 312.98 MB
+```
+
+| Option | Effect |
+|---|---|
+| `--progress auto` | *(default)* draw only when stderr is a terminal |
+| `--progress always` | draw even when redirected |
+| `--progress never` | disable |
+| `--progress-interval MS` | minimum gap between redraws (default 80) |
+
+`auto` is the default so a redirected log does not fill up with carriage
+returns. The reporter is off the critical path: a disabled update is a single
+predictable branch, and when enabled the clock is read once per ~2000 updates
+rather than per update. Measured on the 583 MB sample, 20.4M DIEs: 28.9s with
+progress always versus 30.0s with it off — inside the noise.
+
 ### Binaries
 
 Some filesystems — notably Android's `sdcardfs` — do not carry the executable

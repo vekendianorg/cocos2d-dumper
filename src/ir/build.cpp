@@ -7,6 +7,7 @@
 
 #include "c2d/diag/log.h"
 #include "c2d/diag/metrics.h"
+#include "c2d/diag/progress.h"
 #include "c2d/dwarf/eh_frame.h"
 #include "c2d/dwarf/constants.h"
 
@@ -130,8 +131,18 @@ struct Open {
 bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
                  BuildStats* stats) {
   const auto t_start = diag::Clock::now();
+  auto& pr = diag::progress();
   model.string_self = &ctx;
   model.string_fn = &str_thunk;
+
+  // The counters are declared up front so the line is complete and stable from
+  // the first frame rather than growing as stages are discovered.
+  pr.declare("Units", 0, false);
+  pr.declare("DIEs", 0, false);
+  pr.declare("Types", 0, false);
+  pr.declare("Fields", 0, false);
+  pr.declare("Methods", 0, false);
+  pr.primary("DIEs");
 
   BuildStats st;
   // Measured on the real target: ~3.5M type-defining DIEs. Reserving up front
@@ -210,6 +221,7 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
 
     while (w.next(die)) {
       ++st.dies;
+      pr.add("DIEs");
       const unsigned depth = die.depth();
       const std::uint32_t t = die.tag();
 
@@ -280,6 +292,7 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
         const std::uint32_t node = static_cast<std::uint32_t>(model.types.size());
         model.types.push_back(ty);
         ++st.type_nodes;
+        pr.add("Types");
         model.index_type(static_cast<std::uint32_t>(die.offset()), node);
 
         if (die.attr(aat::kType, v)) {
@@ -338,6 +351,7 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
           const std::uint32_t field_index = static_cast<std::uint32_t>(model.fields.size());
           model.fields.push_back(f);
           ++st.fields;
+          pr.add("Fields");
           if (die.attr(aat::kType, v)) {
             pending.push_back(
                 {Slot::kField, field_index, static_cast<std::uint32_t>(v.u64), h.offset});
@@ -416,6 +430,7 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
           method_depth = depth;
           decl_by_offset.emplace(h.offset + die.offset(), static_cast<std::uint32_t>(mi));
           ++st.methods;
+          pr.add("Methods");
           break;
         }
         case tag::kFormalParameter: {
@@ -471,6 +486,7 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
       open.pop_back();
     }
     ++st.units;
+    pr.add("Units");
   }
 
   // Most member functions were inlined by the compiler, so DWARF holds only the
@@ -482,6 +498,8 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
     for (const elf::Symbol& sym : ctx.elf().symbols()) {
       if (sym.value != 0 && !sym.name.empty()) by_name.emplace(sym.name, sym.value);
     }
+    pr.declare("Methods", model.methods.size());
+    pr.set("Methods", 0);
     for (Method& m : model.methods) {
       if (m.addr != 0 || m.linkage_off == 0) continue;
       const std::string_view mangled = ctx.str_at(m.linkage_off);
@@ -493,6 +511,12 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
       }
     }
   }
+
+  pr.declare("Units", st.units);
+  pr.set("DIEs", st.dies);
+  pr.primary("DIEs");
+  pr.stage("Resolving types");
+  pr.checkpoint();
 
   // Fold the out-of-line definitions into their declarations: this is what
   // gives every member function a code address, and a mangled name when the
@@ -515,7 +539,11 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
   // Resolve every recorded DW_AT_type into a node index. The reference is
   // relative to the start of the unit that contains it, so the unit offset is
   // added back before the offset->type lookup.
+  pr.declare("Types", pending.size());
+  pr.set("Types", 0);
+  pr.checkpoint();
   for (const Pending& p : pending) {
+    pr.add("Types");
     const auto abs = static_cast<std::uint32_t>(p.unit_off + p.target);
     const std::uint32_t node = model.lookup_type(abs);
     if (node == kNoType) {
@@ -536,7 +564,15 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
   model.deduplicate();
 
   // Compute every size now that the graph is complete.
-  for (std::uint32_t i = 0; i < model.types.size(); ++i) model.size_of(i);
+  pr.stage("Deduplicating");
+  pr.checkpoint();
+  pr.stage("Sizing types");
+  pr.declare("Types", model.types.size());
+  pr.set("Types", 0);
+  for (std::uint32_t i = 0; i < model.types.size(); ++i) {
+    model.size_of(i);
+    pr.add("Types");
+  }
   for (Field& f : model.fields) {
     if (!f.offset_known && !f.is_static) ++model.fields_unknown_offset;
   }
@@ -553,6 +589,7 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
     if (widest != 0) cd.size = widest;
   }
 
+  pr.stage("Reading symbols");
   // ---------------------------------------------------------------- symbols --
   //
   // A static data member has no DW_AT_location; its address comes from the
@@ -720,6 +757,12 @@ std::string mangled_class_path(std::string_view name) {
 
 bool build_dwarfless_model(DwarfContext& ctx, Model& model, DwarflessStats* stats) {
   const auto t_start = diag::Clock::now();
+  auto& pr = diag::progress();
+  pr.stage("dwarfless");
+  pr.declare("FDEs", 0, false);
+  pr.declare("Functions", 0, false);
+  pr.declare("Globals", 0, false);
+  pr.declare("Classes", 0, false);
   DwarflessStats st;
   model.string_self = &ctx;
   model.string_fn = &str_thunk;
@@ -745,7 +788,9 @@ bool build_dwarfless_model(DwarfContext& ctx, Model& model, DwarflessStats* stat
   st.fdes = fdes.size();
   model.functions.reserve(fdes.size());
 
+  pr.set("FDEs", fdes.size());
   for (const dwarf::FdeRange& f : fdes) {
+    pr.add("FDEs");
     FunctionDef d;
     auto it = by_addr.find(f.start);
     if (it != by_addr.end() && !it->second->name.empty()) {
@@ -770,6 +815,7 @@ bool build_dwarfless_model(DwarfContext& ctx, Model& model, DwarflessStats* stat
   for (const elf::Symbol& s : elf.symbols()) {
     if (s.name.empty() || s.value == 0) continue;
     if (s.type() != static_cast<std::uint8_t>(elf::StT::kObject)) continue;
+    pr.add("Globals");
     GlobalDef g;
     g.name_off = model.arena_add(s.name);
     g.addr = s.value;

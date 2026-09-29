@@ -23,6 +23,7 @@
 // so a consumer can walk offsets without inferring the gaps.
 #include "c2d/output/emit.h"
 
+#include "c2d/diag/progress.h"
 #include "c2d/output/normalize.h"
 
 #include <algorithm>
@@ -105,12 +106,22 @@ std::string qualified(const ir::Model& m, std::uint32_t type) {
 void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts,
                  EmitStats* stats) {
   EmitStats st;
+  auto& pr = diag::progress();
+  pr.stage("Writing dump");
+  pr.declare("Lines", 0, false);
+  pr.declare("Enums", 0, false);
+  pr.declare("Classes", 0, false);
+  pr.declare("Methods", 0, false);
+  pr.primary("Lines");
   const char* eol = "\n";
   auto line = [&](const std::string& s) {
     std::fwrite(s.data(), 1, s.size(), out);
     std::fputc('\n', out);
     st.bytes += s.size() + 1;
     ++st.lines;
+    // One call site covers the entire dump: writing is the longest stage and
+    // the emitted line count is the only meaningful progress it has.
+    pr.add("Lines", 1);
   };
   (void)eol;
 
@@ -437,6 +448,7 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
           }
           line(sig);
           ++st.methods;
+          pr.add("Methods");
           st.params += m.param_count;
         }
       }
@@ -445,6 +457,7 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
       if (c->kind == 1) ++st.classes;
       else if (c->kind == 2) ++st.unions;
       else ++st.structs;
+      pr.add("Classes");
     }
   }
 
@@ -500,6 +513,8 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
     line("");
   }
 
+  pr.stage("Finalising");
+  pr.checkpoint();
   if (stats != nullptr) *stats = st;
 }
 
