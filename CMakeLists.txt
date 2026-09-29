@@ -56,11 +56,6 @@ else()
   )
 endif()
 
-# psapi is needed for the Windows memory counters in diag/metrics.
-if(WIN32)
-  target_link_libraries(c2d PUBLIC psapi)
-endif()
-
 add_library(c2d STATIC
   src/util/bytes.cpp
   src/diag/log.cpp
@@ -81,6 +76,13 @@ add_library(c2d STATIC
   src/output/normalize.cpp
 )
 target_include_directories(c2d PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  # Must come after add_library(c2d): the target does not exist until then,
+  # and CMake rejects linking to an undefined target.
+# psapi is needed for the Windows memory counters in diag/metrics.
+if(WIN32)
+  target_link_libraries(c2d PUBLIC psapi)
+endif()
+
 target_link_libraries(c2d PUBLIC c2d_flags)
 
 add_executable(c2d-dump src/app/main.cpp)
