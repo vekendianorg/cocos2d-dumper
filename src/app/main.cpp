@@ -26,6 +26,20 @@
 #include "c2d/output/emit.h"
 #include "c2d/util/bytes.h"
 
+// Single source of truth for the version: CMake passes these in.
+#ifndef C2D_VERSION
+#define C2D_VERSION "0.0.0-dev"
+#endif
+#ifndef C2D_VERSION_MAJOR
+#define C2D_VERSION_MAJOR 0
+#endif
+#ifndef C2D_VERSION_MINOR
+#define C2D_VERSION_MINOR 0
+#endif
+#ifndef C2D_VERSION_PATCH
+#define C2D_VERSION_PATCH 0
+#endif
+
 namespace {
 
 using namespace c2d;
@@ -80,7 +94,7 @@ ir::Model metrics_model_;
 
 void usage() {
   std::printf(
-      "c2d -- native ELF/DWARF dumper\n"
+      "c2d " C2D_VERSION " -- native ELF/DWARF dumper\n"
       "\n"
       "Usage:\n"
       "  c2d info   [options] <elf>        ELF + DWARF summary\n"
@@ -137,6 +151,10 @@ bool parse_args(int argc, char** argv, Options& o) {
   o.command = argv[i++];
   if (o.command == "-h" || o.command == "--help") {
     o.command = "help";
+    return true;
+  }
+  if (o.command == "-V" || o.command == "--version") {
+    o.command = "version";
     return true;
   }
 
@@ -247,7 +265,8 @@ bool parse_args(int argc, char** argv, Options& o) {
       o.path = a;
     }
   }
-  if (o.path.empty() && o.command != "help") {
+  // `help` and `version` are the only commands that take no input.
+  if (o.path.empty() && o.command != "help" && o.command != "version") {
     std::fprintf(stderr, "error: no input file given\n");
     return false;
   }
@@ -614,6 +633,13 @@ int main(int argc, char** argv) {
   }
   if (o.command == "help") {
     usage();
+    return 0;
+  }
+  if (o.command == "version") {
+    // Reported as both a dotted version and a semver string so packaging and
+    // humans get what they expect.
+    std::printf("%s\n", C2D_VERSION);
+    std::printf("c2d %d.%d.%d\n", C2D_VERSION_MAJOR, C2D_VERSION_MINOR, C2D_VERSION_PATCH);
     return 0;
   }
   if (!diag::Log::set_level_from_string(o.log_level)) {

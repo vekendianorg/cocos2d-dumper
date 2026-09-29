@@ -1,5 +1,10 @@
 # c2d — native ELF/DWARF dumper
 
+[![CI](https://github.com/vekendianorg/cocos2d-dumper/actions/workflows/ci.yml/badge.svg)](https://github.com/vekendianorg/cocos2d-dumper/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Upstream: <https://github.com/vekendianorg/cocos2d-dumper>
+
 A from-scratch C++20 ELF/DWARF dumper for large Android shared objects. It walks 20,454,580 DIEs across 1183 compilation units in a 583 MB binary
 and emits a C# type dump, falling back to an explicitly-labelled inferred mode
 when a binary is stripped of DWARF.

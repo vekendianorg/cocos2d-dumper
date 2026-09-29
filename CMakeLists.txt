@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(c2d LANGUAGES CXX VERSION 0.1.0)
+project(c2d LANGUAGES CXX VERSION 1.0.0)
 
 # ---------------------------------------------------------------------------
 # c2d -- native ELF/DWARF dumper
@@ -90,4 +90,12 @@ if(C2D_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-message(STATUS "c2d: build type=${CMAKE_BUILD_TYPE} tests=${C2D_BUILD_TESTS}")
+# The version is defined once, here, and compiled in.
+target_compile_definitions(c2d PUBLIC
+  C2D_VERSION="${PROJECT_VERSION}"
+  C2D_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+  C2D_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+  C2D_VERSION_PATCH=${PROJECT_VERSION_PATCH}
+)
+
+message(STATUS "c2d ${PROJECT_VERSION}: build type=${CMAKE_BUILD_TYPE} tests=${C2D_BUILD_TESTS}")
