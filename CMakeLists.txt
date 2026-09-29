@@ -77,6 +77,7 @@ add_library(c2d STATIC
   src/ir/model.cpp
   src/ir/build.cpp
   src/output/emit_il2cpp.cpp
+  src/output/normalize.cpp
 )
 target_include_directories(c2d PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(c2d PUBLIC c2d_flags)

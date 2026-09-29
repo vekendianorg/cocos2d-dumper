@@ -235,6 +235,22 @@ C2D_TEST(Output, EmitsTheIl2CppShape) {
   em.value = 7;
   m.enum_members.push_back(em);
 
+  // A member function with no recoverable address: the emitter must still
+  // precede it with an explicit location comment.
+  {
+    ir::Method mem;
+    mem.name_off = m.arena_add("mystery");
+    mem.ret_type = ir::kNoType;
+    mem.addr = 0;
+    mem.param_count = 1;
+    const auto pi = static_cast<std::uint32_t>(m.params.size());
+    m.params.push_back(ir::Param{});
+    mem.first_param = pi;
+    m.methods.push_back(mem);
+    m.classes[0].first_method = static_cast<std::uint32_t>(m.methods.size() - 1);
+    m.classes[0].method_count = 1;
+  }
+
   ir::FunctionDef f;
   f.name_off = m.arena_add("do_thing");
   f.addr = 0xABC;
@@ -300,6 +316,13 @@ C2D_TEST(Output, EmitsTheIl2CppShape) {
               std::string::npos);
   EXPECT_TRUE(text.find("    public static IntPtr do_thing; // RVA: 0xabc") !=
               std::string::npos);
+  // Every method must carry a location comment, including unresolved ones.
+  EXPECT_TRUE(text.find("// RVA: unavailable Offset: unavailable VA: unavailable") !=
+              std::string::npos);
+  // Generated methods and ABI artefacts are not emitted.
+  EXPECT_TRUE(text.find("_vptr") == std::string::npos);
+  EXPECT_TRUE(text.find("std::") == std::string::npos);
+  EXPECT_TRUE(text.find("allocator<") == std::string::npos);
   // dump_1.73.cs uses lowercase hex throughout, so hex() must not uppercase.
   EXPECT_TRUE(text.find("0xabc") != std::string::npos);
   EXPECT_TRUE(text.find("0xABC") == std::string::npos);

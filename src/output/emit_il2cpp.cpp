@@ -23,6 +23,8 @@
 // so a consumer can walk offsets without inferring the gaps.
 #include "c2d/output/emit.h"
 
+#include "c2d/output/normalize.h"
+
 #include <algorithm>
 #include <unordered_map>
 #include <cstring>
@@ -221,9 +223,10 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
       // whether DWARF called it a struct or a union. Matching that keeps the
       // two dumps diffable, so struct/union is not distinguished here.
       const char* kw = "class";
-      const std::string base_name = opts.emit_bases && c->base != ir::kNoType
-                                        ? qualified(model, c->base)
-                                        : std::string();
+      const std::string base_name =
+          opts.emit_bases && c->base != ir::kNoType
+              ? erase_vendor_namespaces(qualified(model, c->base))
+              : std::string();
       line("// Namespace: ");
       const char* tier = opts.inferred ? " | TIER:rtti" : "";
       if (c->from_arena != 0) {
@@ -243,13 +246,13 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
         ++st.classes;
         continue;
       }
-      line(std::string("public ") + kw + " " + ident(nm) +
+      line(std::string("public ") + kw + " " + ident(erase_vendor_namespaces(nm)) +
            (base_name.empty() ? "" : " : " + ident(base_name)) + " // TypeDefIndex: " +
            std::to_string(++type_index) + " Size: " + hex(c->size) +
            (c->size != 0 ? " Confidence: exact" : " Confidence: partial") + tier);
       line("{");
       if (opts.emit_bases && c->base != ir::kNoType) {
-        line(std::string("    // Bases: ") + base_name + " @ 0x0 public");
+        line(std::string("    // Bases: ") + erase_vendor_namespaces(base_name) + " @ 0x0 public");
         ++st.with_bases;
       }
       line("    // Fields");
@@ -292,7 +295,7 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
             // Statics live in .data/.bss: their "location" is an address, and
             // the reference lists them alongside the instance fields.
             const std::string_view sname = model.str(f.name_off);
-            if (sname.empty()) continue;
+            if (sname.empty() || is_abi_artifact(sname)) continue;
             // Prefer the DWARF address; otherwise recover it from the mangled
             // symbol for this class member. Never print a wrong 0x0.
             std::uint64_t addr = f.offset_known ? f.offset : 0;
@@ -302,8 +305,8 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
               const auto it = model.static_syms.find(key);
               if (it != model.static_syms.end()) addr = it->second;
             }
-            line(std::string("    private static readonly ") + model.type_name(f.type) + " " +
-                 ident(sname) + ";" +
+            line(std::string("    private static readonly ") +
+                 normalize_type(model.type_name(f.type)) + " " + ident(sname) + ";" +
                  (addr != 0 ? " // RVA: " + hex(addr) : std::string(" // static")));
             ++st.fields;
             continue;
@@ -319,14 +322,15 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
           }
           // Only synthesise padding while the layout is still contiguous and we
           // know the previous member's width; otherwise the gap is an artefact.
+          if (is_abi_artifact(fname)) continue;  // vptr / protobuf constants
           if (opts.pad_layout && cursor_known && f.offset > cursor) {
             line("    public int field_" + hex_lower4(cursor) + "; // " + hex(cursor));
             ++st.padded_fields;
           }
           const std::string shown =
               fname.empty() ? ("field_" + hex_lower4(f.offset)) : ident(fname);
-          line(std::string("    public ") + model.type_name(f.type) + " " + shown + "; // " +
-               hex(f.offset));
+          line(std::string("    public ") + normalize_type(model.type_name(f.type)) + " " +
+               shown + "; // " + hex(f.offset));
           ++st.fields;
           const std::uint64_t w = model.size_of(f.type);
           if (w != 0) {
@@ -360,13 +364,24 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
                   });
         for (const std::uint32_t mi : ms) {
           const ir::Method& m = model.methods[mi];
-          const std::string_view mname = model.str(m.name_off);
-          if (mname.empty()) continue;
-          if (m.addr != 0) {
-            line("");
-            line("    // RVA: " + hex(m.addr) + " Offset: " + hex(m.addr) + " VA: " +
-                 hex(m.addr));
-          }
+          const std::string_view raw_name = model.str(m.name_off);
+          if (raw_name.empty()) continue;
+          // A templated method name carries its arguments in the name, so the
+          // same normalisation applies to it.
+          const std::string cleaned = normalize_type(clean_symbol_name(raw_name));
+          if (cleaned.empty()) continue;
+          // Mangled lambdas, sort helpers, thunks and vtable plumbing are not
+          // part of the source API and only add noise.
+          if (is_generated_method(cleaned)) continue;
+          const std::string_view mname = cleaned;
+          // Every method is preceded by its location. When the address could
+          // not be recovered it says so explicitly rather than being omitted,
+          // so a reader can always tell "no code" from "not looked up".
+          line("");
+          line(m.addr != 0
+                   ? "    // RVA: " + hex(m.addr) + " Offset: " + hex(m.addr) +
+                         " VA: " + hex(m.addr)
+                   : std::string("    // RVA: unavailable Offset: unavailable VA: unavailable"));
           // Decide which parameters actually have a usable name. clang shares
           // one abbreviation across named and unnamed parameters, so an unnamed
           // one often carries a stale string-table offset -- in the reference
@@ -403,13 +418,13 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
           // the class name (already flagged as is_ctor in the builder).
           const bool dtor = !mname.empty() && mname.front() == '~';
           const bool void_return = m.ret_type == ir::kNoType || dtor || m.is_ctor;
-          sig += void_return ? "void" : model.type_name(m.ret_type);
+          sig += void_return ? "void" : normalize_signature_type(model.type_name(m.ret_type));
           sig += " " + ident(mname) + "(";
           const std::uint32_t pend = m.first_param + m.param_count;
           for (std::uint32_t pi = m.first_param; pi < pend && pi < model.params.size(); ++pi) {
             if (pi != m.first_param) sig += ", ";
             const std::string_view pname = pnames[pi - m.first_param];
-            sig += model.type_name(model.params[pi].type);
+            sig += normalize_signature_type(model.type_name(model.params[pi].type));
             // Positional fallback, matching the reference: arg0, arg1, ...
             sig += " " + (usable(pname)
                                ? ident(pname)

@@ -195,9 +195,12 @@ std::string Model::type_name(std::uint32_t t) const {
         base = mapped != nullptr ? mapped : (n.empty() ? "unknown" : n);
         break;
       }
-      case TypeKind::kStruct: base = n.empty() ? "struct" : "struct " + n; break;
+      // A named struct or union is referred to by name alone: the dump declares
+      // every type with `class`, so a redundant `struct` prefix is noise. The
+      // keyword is only needed when DWARF gave no name at all.
+      case TypeKind::kStruct: base = n.empty() ? "struct" : n; break;
       case TypeKind::kClass: base = n.empty() ? "class" : n; break;
-      case TypeKind::kUnion: base = n.empty() ? "union" : "union " + n; break;
+      case TypeKind::kUnion: base = n.empty() ? "union" : n; break;
       case TypeKind::kEnum: base = n.empty() ? "enum" : n; break;
       case TypeKind::kFunction: base = n.empty() ? "IntPtr" : n; break;
       default: base = n.empty() ? "unknown" : n; break;
