@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/dwarf/dwarf_context.h"
+#include "stellar/dwarf/dwarf_context.h"
 
-#include "c2d/diag/log.h"
+#include "stellar/diag/log.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 DwarfContext::DwarfContext(const elf::ElfFile& elf)
     : elf_(elf), sections_(elf), abbrev_cache_(16) {}
@@ -30,7 +30,7 @@ std::uint64_t DwarfContext::unit_count() const {
     if (!parse_unit_header(info_v, pos, elf_.endian(), h, &err)) {
       // Stop at the first unparsable unit: everything after it is suspect, and
       // continuing would produce garbage unit boundaries.
-      C2D_DEBUG("unit discovery stopped at 0x%llx: %s", static_cast<unsigned long long>(pos),
+      STELLAR_DEBUG("unit discovery stopped at 0x%llx: %s", static_cast<unsigned long long>(pos),
                 err.c_str());
       break;
     }
@@ -91,4 +91,4 @@ bool DwarfContext::UnitIterator::next(UnitHeader& out, std::string* error) {
   return false;
 }
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

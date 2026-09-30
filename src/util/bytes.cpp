@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/util/bytes.h"
+#include "stellar/util/bytes.h"
 
 #include <cstdio>
 
-namespace c2d::util {
+namespace stellar::util {
 
 std::string human_size(std::uint64_t bytes) {
   static const char* kUnits[] = {"B", "KB", "MB", "GB", "TB"};
@@ -22,4 +22,4 @@ std::string human_size(std::uint64_t bytes) {
   return std::string(buf);
 }
 
-}  // namespace c2d::util
+}  // namespace stellar::util

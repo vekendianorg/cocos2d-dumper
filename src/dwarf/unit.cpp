@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/dwarf/unit.h"
+#include "stellar/dwarf/unit.h"
 
 #include <cstdio>
 
-#include "c2d/dwarf/constants.h"
+#include "stellar/dwarf/constants.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 namespace {
 /// Small printf-to-std::string helper for diagnostics; formatting args are
 /// passed through exactly as given to snprintf.

@@ -6,9 +6,9 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-RUN_DIR="${C2D_RUN_DIR:-${TMPDIR:-/tmp}/c2d-run}"
-C2D="$RUN_DIR/c2d"
-[ -x "$C2D" ] || C2D="$ROOT/build/c2d"
+RUN_DIR="${STELLAR_RUN_DIR:-${TMPDIR:-/tmp}/stellar-run}"
+STELLAR="$RUN_DIR/stellar"
+[ -x "$STELLAR" ] || STELLAR="$ROOT/build/stellar"
 
 INPUT=${1:-}
 OUTPUT=${2:-}
@@ -18,6 +18,6 @@ if [ -z "$INPUT" ]; then
 fi
 cd "$ROOT"
 if [ -n "$OUTPUT" ]; then
-  exec "$C2D" emit -o "$OUTPUT" "$INPUT"
+  exec "$STELLAR" emit -o "$OUTPUT" "$INPUT"
 fi
-exec "$C2D" emit "$INPUT"
+exec "$STELLAR" emit "$INPUT"

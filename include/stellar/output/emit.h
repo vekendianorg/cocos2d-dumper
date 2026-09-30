@@ -19,9 +19,9 @@
 #include <string>
 #include <string_view>
 
-#include "c2d/ir/model.h"
+#include "stellar/ir/model.h"
 
-namespace c2d::output {
+namespace stellar::output {
 
 struct EmitOptions {
   /// Binary name recorded in the header comment.
@@ -72,4 +72,4 @@ struct EmitStats {
 void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts,
                  EmitStats* stats = nullptr);
 
-}  // namespace c2d::output
+}  // namespace stellar::output

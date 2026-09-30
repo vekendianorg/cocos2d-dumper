@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/diag/metrics.h"
+#include "stellar/diag/metrics.h"
 
 #include <cstdio>
 #include <cstring>
@@ -14,9 +14,9 @@
 #include <fstream>
 #include <sstream>
 
-#include "c2d/util/bytes.h"
+#include "stellar/util/bytes.h"
 
-namespace c2d::diag {
+namespace stellar::diag {
 namespace {
 
 /// Reads a "Key:  <number> kB" line from /proc/self/status.
@@ -103,4 +103,4 @@ ResourceReport resource_report(double wall_seconds) {
   return r;
 }
 
-}  // namespace c2d::diag
+}  // namespace stellar::diag

@@ -7,9 +7,9 @@
 
 #include <filesystem>
 
-#include "c2d/elf/elf_types.h"
+#include "stellar/elf/elf_types.h"
 
-namespace c2d::test {
+namespace stellar::test {
 namespace {
 
 /// S_ISREG is a POSIX macro with no MSVC equivalent, so spell the test out for
@@ -246,10 +246,10 @@ bool write_file(const std::string& path, const std::vector<std::uint8_t>& bytes)
 ///
 /// There is deliberately no default: a path baked into the repository would
 /// only ever be valid on one machine, and would silently skip everywhere else
-/// for the wrong reason. Set C2D_REAL_BINARY to a file (or a directory holding
+/// for the wrong reason. Set STELLAR_REAL_BINARY to a file (or a directory holding
 /// `libcocos2dcpp_1.74.2.so`) to enable these tests; they are skipped otherwise.
 std::string real_binary_path() {
-  const char* env = std::getenv("C2D_REAL_BINARY");
+  const char* env = std::getenv("STELLAR_REAL_BINARY");
   if (env == nullptr || env[0] == '\0') return {};
   if (!is_regular_file(env)) {
     // Allow pointing at a directory that contains the sample.
@@ -260,4 +260,4 @@ std::string real_binary_path() {
   return env;
 }
 
-}  // namespace c2d::test
+}  // namespace stellar::test

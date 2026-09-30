@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/ir/build.h"
+#include "stellar/ir/build.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
 
-#include "c2d/diag/log.h"
-#include "c2d/diag/metrics.h"
-#include "c2d/diag/progress.h"
-#include "c2d/dwarf/eh_frame.h"
-#include "c2d/dwarf/constants.h"
+#include "stellar/diag/log.h"
+#include "stellar/diag/metrics.h"
+#include "stellar/diag/progress.h"
+#include "stellar/dwarf/eh_frame.h"
+#include "stellar/dwarf/constants.h"
 
-namespace c2d::ir {
+namespace stellar::ir {
 namespace {
 
-using namespace c2d::dwarf;
+using namespace stellar::dwarf;
 
 /// Resolver shim so the model can read .debug_str without owning the context.
 std::string_view str_thunk(void* self, std::uint32_t off) {
@@ -659,7 +659,7 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
           break;
       }
     }
-    C2D_DEBUG("symbols: %llu functions, %llu globals", static_cast<unsigned long long>(fn),
+    STELLAR_DEBUG("symbols: %llu functions, %llu globals", static_cast<unsigned long long>(fn),
               static_cast<unsigned long long>(gl));
   }
 
@@ -678,9 +678,9 @@ bool build_model(DwarfContext& ctx, const BuildOptions& opts, Model& model,
   return true;
 }
 
-}  // namespace c2d::ir
+}  // namespace stellar::ir
 
-namespace c2d::ir {
+namespace stellar::ir {
 
 // ---------------------------------------------------------------------------
 // Dwarfless mode
@@ -857,4 +857,4 @@ bool build_dwarfless_model(DwarfContext& ctx, Model& model, DwarflessStats* stat
   return true;
 }
 
-}  // namespace c2d::ir
+}  // namespace stellar::ir

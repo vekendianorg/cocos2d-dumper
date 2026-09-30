@@ -10,14 +10,14 @@
 #include <string>
 #include <vector>
 
-#include "c2d/dwarf/dwarf_context.h"
-#include "c2d/dwarf/eh_frame.h"
-#include "c2d/ir/build.h"
-#include "c2d/output/emit.h"
+#include "stellar/dwarf/dwarf_context.h"
+#include "stellar/dwarf/eh_frame.h"
+#include "stellar/ir/build.h"
+#include "stellar/output/emit.h"
 #include "fixture_builder.h"
 #include "test_framework.h"
 
-using namespace c2d;
+using namespace stellar;
 
 namespace {
 
@@ -26,12 +26,12 @@ constexpr std::uint64_t kEhAddr = 0x1000;
 /// A stripped ELF: an .eh_frame with three functions and no .debug_info.
 template <typename Fn>
 void with_stripped_binary(Fn&& fn) {
-  c2d::test::DebugSections dbg;
+  stellar::test::DebugSections dbg;
   dbg.eh_frame_addr = kEhAddr;
-  dbg.eh_frame = c2d::test::build_eh_frame(
+  dbg.eh_frame = stellar::test::build_eh_frame(
       {{0x2000, 0x40}, {0x2040, 0x10}, {0x2100, 0x80}}, kEhAddr);
-  const std::string path = c2d::test::temp_path("c2d_stripped.so");
-  c2d::test::write_file(path, c2d::test::build_elf(dbg));
+  const std::string path = stellar::test::temp_path("stellar_stripped.so");
+  stellar::test::write_file(path, stellar::test::build_elf(dbg));
   fn(path);
 }
 
@@ -48,10 +48,10 @@ std::string slurp(const std::string& path) {
 
 }  // namespace
 
-C2D_TEST(Dwarfless, EhFrameRecoversExactFunctionRanges) {
-  c2d::test::DebugSections dbg;
+STELLAR_TEST(Dwarfless, EhFrameRecoversExactFunctionRanges) {
+  stellar::test::DebugSections dbg;
   dbg.eh_frame_addr = kEhAddr;
-  dbg.eh_frame = c2d::test::build_eh_frame(
+  dbg.eh_frame = stellar::test::build_eh_frame(
       {{0x2000, 0x40}, {0x2040, 0x10}, {0x2100, 0x80}}, kEhAddr);
 
   dwarf::EhFrameStats st;
@@ -69,10 +69,10 @@ C2D_TEST(Dwarfless, EhFrameRecoversExactFunctionRanges) {
   EXPECT_EQ(ranges[2].size, std::uint64_t{0x80});
 }
 
-C2D_TEST(Dwarfless, EhFrameStopsCleanlyOnTruncatedInput) {
-  c2d::test::DebugSections dbg;
+STELLAR_TEST(Dwarfless, EhFrameStopsCleanlyOnTruncatedInput) {
+  stellar::test::DebugSections dbg;
   dbg.eh_frame_addr = kEhAddr;
-  dbg.eh_frame = c2d::test::build_eh_frame({{0x2000, 0x40}}, kEhAddr);
+  dbg.eh_frame = stellar::test::build_eh_frame({{0x2000, 0x40}}, kEhAddr);
   dbg.eh_frame.resize(dbg.eh_frame.size() - 3);  // chop the last FDE
   dwarf::EhFrameStats st;
   const auto ranges = dwarf::parse_eh_frame(
@@ -81,7 +81,7 @@ C2D_TEST(Dwarfless, EhFrameStopsCleanlyOnTruncatedInput) {
   EXPECT_EQ(ranges.size(), std::size_t{0});
 }
 
-C2D_TEST(Dwarfless, StrippedBinaryIsDetectedAndFunctionsAreNamedSubAddr) {
+STELLAR_TEST(Dwarfless, StrippedBinaryIsDetectedAndFunctionsAreNamedSubAddr) {
   with_stripped_binary([](const std::string& path) {
     std::string err;
     elf::ElfFile f;
@@ -106,7 +106,7 @@ C2D_TEST(Dwarfless, StrippedBinaryIsDetectedAndFunctionsAreNamedSubAddr) {
   });
 }
 
-C2D_TEST(Dwarfless, DumpCarriesTheWarningBannerAndTierTags) {
+STELLAR_TEST(Dwarfless, DumpCarriesTheWarningBannerAndTierTags) {
   with_stripped_binary([](const std::string& path) {
     elf::ElfFile f;
     std::string err;
@@ -120,7 +120,7 @@ C2D_TEST(Dwarfless, DumpCarriesTheWarningBannerAndTierTags) {
     o.inferred = true;
     o.named_functions = st.functions_named;
     o.unnamed_functions = st.functions_sub_;
-    const std::string out_path = c2d::test::temp_path("c2d_dwarfless.cs");
+    const std::string out_path = stellar::test::temp_path("stellar_dwarfless.cs");
     std::FILE* out = std::fopen(out_path.c_str(), "wb");
     EXPECT_TRUE(out != nullptr);
     output::EmitStats es;
@@ -136,17 +136,17 @@ C2D_TEST(Dwarfless, DumpCarriesTheWarningBannerAndTierTags) {
     EXPECT_TRUE(text.find("| TIER:infer") != std::string::npos);
     EXPECT_TRUE(text.find("public static IntPtr sub_2000; // RVA: 0x2000") != std::string::npos);
     // And the DWARF-mode emitter must NOT emit the warning.
-    EXPECT_TRUE(text.find("// VEKENDIAN Cocos2d Dumper Il2cpp-style") != std::string::npos);
+    EXPECT_TRUE(text.find("// Stellar Il2cpp-style dump (Cocos2d ELF/DWARF)") != std::string::npos);
   });
 }
 
-C2D_TEST(Dwarfless, DwarfModeDumpHasNoWarningBanner) {
+STELLAR_TEST(Dwarfless, DwarfModeDumpHasNoWarningBanner) {
   // The same model, emitted without the inferred flag, must stay clean: this
   // guards against the warning leaking into authoritative dumps.
   ir::Model m;
   m.inferred = false;
   output::EmitOptions o;  // inferred defaults to false
-  const std::string out_path = c2d::test::temp_path("c2d_dwarf_mode.cs");
+  const std::string out_path = stellar::test::temp_path("stellar_dwarf_mode.cs");
   std::FILE* out = std::fopen(out_path.c_str(), "wb");
   EXPECT_TRUE(out != nullptr);
   output::EmitStats es;

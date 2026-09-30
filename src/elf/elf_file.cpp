@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/elf/elf_file.h"
+#include "stellar/elf/elf_file.h"
 
 #include <cstring>
 
-#include "c2d/diag/log.h"
+#include "stellar/diag/log.h"
 
-namespace c2d::elf {
+namespace stellar::elf {
 namespace {
 
 /// Read a NUL-terminated string out of a bounds-checked byte view.
@@ -127,7 +127,7 @@ bool ElfFile::open(const std::string& path, std::string* error) {
   // headers against the file, and fall back to the program headers.
   if (needs_phdr_recovery()) {
     const std::size_t added = recover_sections_from_phdrs();
-    C2D_INFO("section table unusable; recovered %zu section(s) from program headers",
+    STELLAR_INFO("section table unusable; recovered %zu section(s) from program headers",
              added);
   }
   if (!parse_symbols(error)) return false;
@@ -345,5 +345,5 @@ bool ElfFile::parse_symbols(std::string* error) {
   return true;
 }
 
-}  // namespace c2d::elf
+}  // namespace stellar::elf
 

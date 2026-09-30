@@ -1,9 +1,9 @@
-# c2d — native ELF/DWARF dumper
+# Stellar — native ELF/DWARF dumper
 
-[![CI](https://github.com/vekendianorg/cocos2d-dumper/actions/workflows/ci.yml/badge.svg)](https://github.com/vekendianorg/cocos2d-dumper/actions/workflows/ci.yml)
+[![CI](https://github.com/vekendianorg/stellar/actions/workflows/ci.yml/badge.svg)](https://github.com/vekendianorg/stellar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Upstream: <https://github.com/vekendianorg/cocos2d-dumper>
+Upstream: <https://github.com/vekendianorg/stellar>
 
 A from-scratch C++20 ELF/DWARF dumper for large shared objects. It reads the
 debug info directly, reconstructs the C++ type model, and writes an
@@ -44,13 +44,13 @@ Under proot, CMake's host detection shells out to `getprop`, which does not
 exist, so it cannot determine the system version and aborts. Supplying
 `CMAKE_SYSTEM_NAME` and `CMAKE_SYSTEM_VERSION` skips that path. It is harmless on
 native Termux, so `scripts/build.sh` applies it automatically whenever it detects
-a Termux install prefix. `C2D_FORCE_TERMUX=0|1` overrides the detection.
+a Termux install prefix. `STELLAR_FORCE_TERMUX=0|1` overrides the detection.
 
 ### Binaries
 
 Some filesystems — notably Android's `sdcardfs` — do not carry the executable
 bit, so a binary written there cannot be run in place. `scripts/build.sh` copies
-`c2d` and `c2d-tests` to `$C2D_RUN_DIR` (default `$TMPDIR/c2d-run`) and marks them
+`stellar` and `stellar-tests` to `$STELLAR_RUN_DIR` (default `$TMPDIR/stellar-run`) and marks them
 executable.
 
 ### Progress
@@ -61,7 +61,7 @@ looks like a hang:
 ```
 [ 24%] Units: 283/1183 | DIEs: 4,908,043 | Types: 715,300 | Stage: DWARF
 [100%] Units: 1183/1183 | DIEs: 20,454,580 | Lines: 6,383,926 | Stage: Writing dump
-c2d: done (dwarf) libfoo.so in 0.0s -- 1183 units, 20,454,580 DIEs, ... -> 0 lines, 0.0 MB
+stellar: done (dwarf) libfoo.so in 0.0s -- 1183 units, 20,454,580 DIEs, ... -> 0 lines, 0.0 MB
 ```
 
 | Option | Effect |
@@ -80,11 +80,11 @@ per update, with rendering reusing one buffer.
 ## Usage
 
 ```sh
-c2d info  [options] <elf>     # ELF + DWARF section/capability summary
-c2d units [options] <elf>     # per-unit header + DIE count
-c2d scan  [options] <elf>     # walk DIEs, count tags, measure throughput
-c2d dump  [options] <elf>     # print one unit's DIE tree
-c2d emit  [options] <elf>     # build the model and write the dump
+stellar info  [options] <elf>     # ELF + DWARF section/capability summary
+stellar units [options] <elf>     # per-unit header + DIE count
+stellar scan  [options] <elf>     # walk DIEs, count tags, measure throughput
+stellar dump  [options] <elf>     # print one unit's DIE tree
+stellar emit  [options] <elf>     # build the model and write the dump
 ```
 
 Bounding options keep exploration cheap on a large input:
@@ -102,12 +102,12 @@ Bounding options keep exploration cheap on a large input:
 Examples:
 
 ```sh
-c2d info  libfoo.so
-c2d scan  --max-units 20 --tags --stats libfoo.so    # bounded
-c2d scan  --unit-stride 100 --stats libfoo.so        # every 100th unit
-c2d scan  --stats libfoo.so                         # full scan
-c2d dump  --unit 0 --max-print 40 libfoo.so
-c2d emit  --stats libfoo.so                         # -> output/dump.cs
+stellar info  libfoo.so
+stellar scan  --max-units 20 --tags --stats libfoo.so    # bounded
+stellar scan  --unit-stride 100 --stats libfoo.so        # every 100th unit
+stellar scan  --stats libfoo.so                         # full scan
+stellar dump  --unit 0 --max-print 40 libfoo.so
+stellar emit  --stats libfoo.so                         # -> output/dump.cs
 sh scripts/emit.sh libfoo.so                        # same, via the helper
 ```
 
@@ -134,16 +134,16 @@ The real-binary cases need a large ELF and are **skipped unless you point at
 one**:
 
 ```sh
-C2D_REAL_BINARY=/path/to/liblarge.so sh scripts/test.sh --real
+STELLAR_REAL_BINARY=/path/to/liblarge.so sh scripts/test.sh --real
 ```
 
-`C2D_REAL_BINARY` accepts a file or a directory containing it. There is
+`STELLAR_REAL_BINARY` accepts a file or a directory containing it. There is
 deliberately no default path: a path baked into the repository would only be
 valid on one machine and would skip everywhere else for the wrong reason.
 
 ## Two modes
 
-`c2d emit` picks a mode automatically (`--mode=auto|dwarf|dwarfless` overrides).
+`stellar emit` picks a mode automatically (`--mode=auto|dwarf|dwarfless` overrides).
 
 **`dwarf` — ground truth.** Types, member offsets, enums, methods and
 inheritance come from `.debug_info`. Output goes to `output/dump.cs`.
@@ -249,6 +249,6 @@ All three were found empirically, and each has a regression test:
    producer, `enumerator` is 0x28 (not 0x21), `subprogram` is 0x2e (not 0x27) and
    `variable` is 0x34 (not 0x2e). Using the DWARF 5 table silently
    misclassifies most of the file. The values in
-   `include/c2d/dwarf/constants.h` were established by dumping the attribute
+   `include/stellar/dwarf/constants.h` were established by dumping the attribute
    set of every distinct tag the input actually contains, rather than trusting
    either spec from memory.

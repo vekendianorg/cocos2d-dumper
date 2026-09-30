@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/diag/progress.h"
+#include "stellar/diag/progress.h"
 
 #include <cstdio>
 #include <cstring>
@@ -7,20 +7,20 @@
 #if defined(_WIN32)
 #include <io.h>
 #include <windows.h>
-#define C2D_ISATTY _isatty
-#define C2D_FILENO _fileno
+#define STELLAR_ISATTY _isatty
+#define STELLAR_FILENO _fileno
 #else
 #include <sys/ioctl.h>
 #include <unistd.h>
-#define C2D_ISATTY isatty
-#define C2D_FILENO fileno
+#define STELLAR_ISATTY isatty
+#define STELLAR_FILENO fileno
 #endif
 
 #include <cstdlib>
 
-#include "c2d/diag/metrics.h"
+#include "stellar/diag/metrics.h"
 
-namespace c2d::diag {
+namespace stellar::diag {
 namespace {
 
 /// How many `add` calls may pass before the clock is consulted. Reading the
@@ -51,7 +51,7 @@ int terminal_width() {
   return 0;
 #else
   struct winsize ws {};
-  if (::ioctl(C2D_FILENO(stderr), TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+  if (::ioctl(STELLAR_FILENO(stderr), TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
     return ws.ws_col;
   }
   return 0;
@@ -61,7 +61,7 @@ int terminal_width() {
 /// Whether the terminal can erase a line for us. A dumb terminal, or a
 /// redirected stream, gets the space-padding fallback instead.
 bool terminal_supports_ansi() {
-  if (C2D_ISATTY(C2D_FILENO(stderr)) == 0) return false;
+  if (STELLAR_ISATTY(STELLAR_FILENO(stderr)) == 0) return false;
   const char* term = std::getenv("TERM");
   if (term != nullptr) {
     const std::string_view t(term);
@@ -85,7 +85,7 @@ void Progress::configure(bool force, int min_interval_ms) {
   interval_ms_ = min_interval_ms > 0 ? min_interval_ms : 80;
   // Only draw over a terminal unless asked: a redirected log would otherwise
   // be one enormous line of carriage returns.
-  enabled_ = force || C2D_ISATTY(C2D_FILENO(stderr)) != 0;
+  enabled_ = force || STELLAR_ISATTY(STELLAR_FILENO(stderr)) != 0;
   draw_enabled_ = true;
   // Only worth detecting when something will actually be drawn.
   ansi_ = enabled_ && terminal_supports_ansi();
@@ -307,4 +307,4 @@ void Progress::fail(std::string_view message) {
   finish_line(message);
 }
 
-}  // namespace c2d::diag
+}  // namespace stellar::diag

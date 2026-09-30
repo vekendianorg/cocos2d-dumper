@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: MIT
 // Tests against the real target binary.
 //
-// These are opt-in (ctest target `c2d_real_binary`) because the input is 583 MB
+// These are opt-in (ctest target `stellar_real_binary`) because the input is 583 MB
 // and a full DIE traversal must not run on every edit. The expected values
 // below were measured from that binary; see docs/MILESTONES.md for how.
 #include <chrono>
 #include <cstdio>
 #include <string>
 
-#include "c2d/diag/log.h"
-#include "c2d/diag/metrics.h"
-#include "c2d/dwarf/dwarf_context.h"
-#include "c2d/elf/elf_file.h"
+#include "stellar/diag/log.h"
+#include "stellar/diag/metrics.h"
+#include "stellar/dwarf/dwarf_context.h"
+#include "stellar/elf/elf_file.h"
 #include "fixture_builder.h"
 #include "test_framework.h"
 
-using namespace c2d;
+using namespace stellar;
 
 namespace {
 
 /// Opens the real binary, or returns false (tests then report a skip).
 bool open_real(elf::ElfFile& f, std::string& path) {
-  path = c2d::test::real_binary_path();
+  path = stellar::test::real_binary_path();
   if (path.empty()) {
     std::fprintf(stderr, "  (skipped: real binary not present)\n");
     return false;
@@ -36,7 +36,7 @@ bool open_real(elf::ElfFile& f, std::string& path) {
 
 }  // namespace
 
-C2D_TEST(RealBinary, ElfHeaderAndSectionsMatchTheMeasuredTarget) {
+STELLAR_TEST(RealBinary, ElfHeaderAndSectionsMatchTheMeasuredTarget) {
   elf::ElfFile f;
   std::string path;
   if (!open_real(f, path)) return;
@@ -66,7 +66,7 @@ C2D_TEST(RealBinary, ElfHeaderAndSectionsMatchTheMeasuredTarget) {
   EXPECT_TRUE(f.find_section(".debug_loc") != nullptr);
 }
 
-C2D_TEST(RealBinary, UnitCountAndVersionsMatchTheMeasuredTarget) {
+STELLAR_TEST(RealBinary, UnitCountAndVersionsMatchTheMeasuredTarget) {
   elf::ElfFile f;
   std::string path;
   if (!open_real(f, path)) return;
@@ -91,7 +91,7 @@ C2D_TEST(RealBinary, UnitCountAndVersionsMatchTheMeasuredTarget) {
   EXPECT_EQ(it.skipped_errors(), std::uint64_t{0});
 }
 
-C2D_TEST(RealBinary, BoundedUnitScanMatchesAnIndependentWalk) {
+STELLAR_TEST(RealBinary, BoundedUnitScanMatchesAnIndependentWalk) {
   elf::ElfFile f;
   std::string path;
   if (!open_real(f, path)) return;
@@ -112,7 +112,7 @@ C2D_TEST(RealBinary, BoundedUnitScanMatchesAnIndependentWalk) {
   EXPECT_EQ(dies, std::uint64_t{5713});
 }
 
-C2D_TEST(RealBinary, FullDieTraversalIsConsistentAndBoundedInMemory) {
+STELLAR_TEST(RealBinary, FullDieTraversalIsConsistentAndBoundedInMemory) {
   elf::ElfFile f;
   std::string path;
   if (!open_real(f, path)) return;

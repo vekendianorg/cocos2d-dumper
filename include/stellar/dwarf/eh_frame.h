@@ -20,9 +20,9 @@
 #include <string_view>
 #include <vector>
 
-#include "c2d/util/bytes.h"
+#include "stellar/util/bytes.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 /// One function's unwind range, as recovered from an FDE.
 struct FdeRange {
@@ -64,4 +64,4 @@ struct EhFrameStats {
 std::vector<FdeRange> parse_eh_frame(util::ByteView section, std::uint64_t section_addr,
                                      EhFrameStats* stats = nullptr);
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

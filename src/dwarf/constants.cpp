@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/dwarf/constants.h"
+#include "stellar/dwarf/constants.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 bool form_size(std::uint64_t f, unsigned address_size, unsigned offset_size,
                std::uint64_t& size) noexcept {
@@ -201,4 +201,4 @@ std::string_view form_name(std::uint64_t f) noexcept {
   return lookup(kForms, std::size(kForms), f);
 }
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

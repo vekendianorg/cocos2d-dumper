@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/dwarf/sections.h"
+#include "stellar/dwarf/sections.h"
 
 #include <array>
 #include <sstream>
 
-#include "c2d/util/bytes.h"
+#include "stellar/util/bytes.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 const char* section_name(Sec s) noexcept {
   switch (s) {
@@ -83,4 +83,4 @@ std::string Sections::capability_report() const {
   return os.str();
 }
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

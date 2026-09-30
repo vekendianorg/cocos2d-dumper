@@ -13,12 +13,12 @@
 #include <string>
 #include <vector>
 
-#include "c2d/dwarf/abbrev.h"
-#include "c2d/dwarf/sections.h"
-#include "c2d/dwarf/unit.h"
-#include "c2d/elf/elf_file.h"
+#include "stellar/dwarf/abbrev.h"
+#include "stellar/dwarf/sections.h"
+#include "stellar/dwarf/unit.h"
+#include "stellar/elf/elf_file.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 /// Bounds and filters for a unit scan. Defaults mean "everything"; the CLI and
 /// the test-suite use these to keep iteration bounded.
@@ -113,4 +113,4 @@ bool DwarfContext::walk_unit(const UnitHeader& unit, Fn&& fn, std::uint64_t max_
   return true;
 }
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

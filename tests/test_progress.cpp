@@ -4,10 +4,10 @@
 #include <chrono>
 #include <string>
 
-#include "c2d/diag/progress.h"
+#include "stellar/diag/progress.h"
 #include "test_framework.h"
 
-using c2d::diag::Progress;
+using stellar::diag::Progress;
 
 namespace {
 
@@ -24,7 +24,7 @@ Progress& reporter() {
 
 }  // namespace
 
-C2D_TEST(Progress, RendersCountersWithThousandsAndPercentage) {
+STELLAR_TEST(Progress, RendersCountersWithThousandsAndPercentage) {
   Progress& p = reporter();
   p.declare("DIEs", 50000);
   p.declare("Types", 4800);
@@ -38,7 +38,7 @@ C2D_TEST(Progress, RendersCountersWithThousandsAndPercentage) {
   EXPECT_TRUE(p.render().find("Stage: Resolving types") != std::string::npos);
 }
 
-C2D_TEST(Progress, ExplicitPrimaryOverridesTheDefaultChoice) {
+STELLAR_TEST(Progress, ExplicitPrimaryOverridesTheDefaultChoice) {
   Progress& p = reporter();
   p.declare("DIEs", 100);
   p.declare("Methods", 400);
@@ -50,7 +50,7 @@ C2D_TEST(Progress, ExplicitPrimaryOverridesTheDefaultChoice) {
   EXPECT_TRUE(p.render().find("[ 10%]") != std::string::npos);
 }
 
-C2D_TEST(Progress, CountersWithoutTotalsShowNoFraction) {
+STELLAR_TEST(Progress, CountersWithoutTotalsShowNoFraction) {
   Progress& p = reporter();
   p.declare("Lines", 0, /*has_total=*/false);
   p.set("Lines", 4096);
@@ -58,7 +58,7 @@ C2D_TEST(Progress, CountersWithoutTotalsShowNoFraction) {
   EXPECT_TRUE(p.render().find("Lines: 4,096/") == std::string::npos);
 }
 
-C2D_TEST(Progress, AddAccumulatesAndDeclareIsIdempotent) {
+STELLAR_TEST(Progress, AddAccumulatesAndDeclareIsIdempotent) {
   Progress& p = reporter();
   p.declare("Fields", 1000);
   for (int i = 0; i < 250; ++i) p.add("Fields");
@@ -70,7 +70,7 @@ C2D_TEST(Progress, AddAccumulatesAndDeclareIsIdempotent) {
   EXPECT_TRUE(p.render().find("Fields: 255/2,000") != std::string::npos);
 }
 
-C2D_TEST(Progress, UnknownLabelsAreCreatedOnDemand) {
+STELLAR_TEST(Progress, UnknownLabelsAreCreatedOnDemand) {
   Progress& p = reporter();
   // add() on a label that was never declared must still be counted, which is
   // what lets a stage report without pre-registering.
@@ -79,7 +79,7 @@ C2D_TEST(Progress, UnknownLabelsAreCreatedOnDemand) {
   EXPECT_TRUE(p.render().find("AdHoc: 5") != std::string::npos);
 }
 
-C2D_TEST(Progress, DisabledReporterCostsNothingInAHotLoop) {
+STELLAR_TEST(Progress, DisabledReporterCostsNothingInAHotLoop) {
   Progress& p = reporter();
   p.set_enabled(false);
   // The point of the early-out: the 20M-iteration DIE loop must not pay for
@@ -92,7 +92,7 @@ C2D_TEST(Progress, DisabledReporterCostsNothingInAHotLoop) {
   EXPECT_TRUE(ms < 250.0);
 }
 
-C2D_TEST(Progress, RenderIsStableAcrossRepeatedCalls) {
+STELLAR_TEST(Progress, RenderIsStableAcrossRepeatedCalls) {
   Progress& p = reporter();
   p.declare("Units", 10);
   p.set("Units", 5);
@@ -100,7 +100,7 @@ C2D_TEST(Progress, RenderIsStableAcrossRepeatedCalls) {
   EXPECT_STREQ(p.render(), p.render());
 }
 
-C2D_TEST(Progress, RenderIsClampedToTheTerminalWidth) {
+STELLAR_TEST(Progress, RenderIsClampedToTheTerminalWidth) {
   Progress& p = reporter();
   // The dry-run reporter draws nothing, so exercise the clamp through render()
   // plus the width the reporter would have detected.
@@ -112,7 +112,7 @@ C2D_TEST(Progress, RenderIsClampedToTheTerminalWidth) {
   EXPECT_FALSE(p.ansi());              // so the space-padding fallback is used
 }
 
-C2D_TEST(Progress, DrawIsDisabledInDryRunSoTestsNeverWrite) {
+STELLAR_TEST(Progress, DrawIsDisabledInDryRunSoTestsNeverWrite) {
   Progress& p = reporter();
   p.declare("Lines", 0, false);
   // configure() enables drawing; the test helper turns it back off, which is

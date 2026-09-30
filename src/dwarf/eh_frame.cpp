@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/dwarf/eh_frame.h"
+#include "stellar/dwarf/eh_frame.h"
 
 #include <algorithm>
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 namespace {
 
 /// What a CIE tells us about the FDEs that reference it.
@@ -153,4 +153,4 @@ std::vector<FdeRange> parse_eh_frame(util::ByteView section, std::uint64_t secti
   return out;
 }
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

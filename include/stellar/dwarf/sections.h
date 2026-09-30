@@ -12,10 +12,10 @@
 #include <string>
 #include <vector>
 
-#include "c2d/elf/elf_file.h"
-#include "c2d/util/bytes.h"
+#include "stellar/elf/elf_file.h"
+#include "stellar/util/bytes.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 /// Canonical DWARF section names, in the order they are probed.
 enum class Sec : std::uint8_t {
@@ -74,4 +74,4 @@ class Sections {
   std::uint64_t total_bytes_ = 0;
 };
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/output/normalize.h"
+#include "stellar/output/normalize.h"
 
 #include <algorithm>
 #include <vector>
 
-namespace c2d::output {
+namespace stellar::output {
 namespace {
 
 std::string_view trim(std::string_view s) {
@@ -396,4 +396,4 @@ std::string clean_symbol_name(std::string_view name) {
   return out;
 }
 
-}  // namespace c2d::output
+}  // namespace stellar::output

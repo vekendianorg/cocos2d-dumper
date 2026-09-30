@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 // --- Tags ------------------------------------------------------------------
 //
@@ -211,5 +211,5 @@ enum : std::uint64_t {
 [[nodiscard]] std::string_view attr_name(std::uint32_t attr) noexcept;
 [[nodiscard]] std::string_view form_name(std::uint64_t form) noexcept;
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf
 

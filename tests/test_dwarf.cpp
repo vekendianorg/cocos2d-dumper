@@ -5,26 +5,26 @@
 #include <string>
 #include <vector>
 
-#include "c2d/diag/log.h"
-#include "c2d/dwarf/abbrev.h"
-#include "c2d/dwarf/dwarf_context.h"
-#include "c2d/dwarf/unit.h"
-#include "c2d/elf/elf_file.h"
-#include "c2d/util/bytes.h"
+#include "stellar/diag/log.h"
+#include "stellar/dwarf/abbrev.h"
+#include "stellar/dwarf/dwarf_context.h"
+#include "stellar/dwarf/unit.h"
+#include "stellar/elf/elf_file.h"
+#include "stellar/util/bytes.h"
 #include "fixture_builder.h"
 #include "test_framework.h"
 
-using namespace c2d;
-using c2d::test::AbbrevSpec;
-using c2d::test::Bytes;
-using c2d::test::build_abbrev;
-using c2d::test::build_unit_dwarf64;
-using c2d::test::build_unit_v4;
-using c2d::test::build_unit_v5;
-using c2d::test::RawDie;
+using namespace stellar;
+using stellar::test::AbbrevSpec;
+using stellar::test::Bytes;
+using stellar::test::build_abbrev;
+using stellar::test::build_unit_dwarf64;
+using stellar::test::build_unit_v4;
+using stellar::test::build_unit_v5;
+using stellar::test::RawDie;
 
 // The abbreviation tests spell constants without the `dwarf::` prefix.
-using namespace c2d::dwarf;
+using namespace stellar::dwarf;
 
 /// Convenience: a ByteView over a byte vector owned by the caller.
 inline util::ByteView bv(const std::vector<std::uint8_t>& v) {
@@ -35,7 +35,7 @@ inline util::ByteView bv(const std::vector<std::uint8_t>& v) {
 // util::Cursor
 // ---------------------------------------------------------------------------
 
-C2D_TEST(Cursor, ReadsFixedWidthInBothEndiannesses) {
+STELLAR_TEST(Cursor, ReadsFixedWidthInBothEndiannesses) {
   const std::uint8_t buf[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
   util::Cursor le(buf, sizeof(buf), util::Endian::Little);
   std::uint32_t v32 = 0;
@@ -46,7 +46,7 @@ C2D_TEST(Cursor, ReadsFixedWidthInBothEndiannesses) {
   EXPECT_EQ(v32, 0x01020304u);
 }
 
-C2D_TEST(Cursor, Uleb128RoundTrip) {
+STELLAR_TEST(Cursor, Uleb128RoundTrip) {
   const std::vector<std::uint64_t> values = {0, 1, 127, 128, 255, 624485, 0x7fffffff,
                                              0xffffffffull, 0x1ffffffffull};
   for (std::uint64_t want : values) {
@@ -60,7 +60,7 @@ C2D_TEST(Cursor, Uleb128RoundTrip) {
   }
 }
 
-C2D_TEST(Cursor, Sleb128SignExtension) {
+STELLAR_TEST(Cursor, Sleb128SignExtension) {
   const std::vector<std::int64_t> values = {0, -1, 63, -64, 127, -128, 12345, -12345};
   for (std::int64_t want : values) {
     Bytes b;
@@ -73,7 +73,7 @@ C2D_TEST(Cursor, Sleb128SignExtension) {
   }
 }
 
-C2D_TEST(Cursor, OutOfBoundsReadLatchesErrorAndDoesNotOverrun) {
+STELLAR_TEST(Cursor, OutOfBoundsReadLatchesErrorAndDoesNotOverrun) {
   const std::uint8_t buf[3] = {1, 2, 3};
   util::Cursor c(buf, sizeof(buf));
   std::uint64_t v = 0;
@@ -84,7 +84,7 @@ C2D_TEST(Cursor, OutOfBoundsReadLatchesErrorAndDoesNotOverrun) {
   EXPECT_EQ(c.remaining(), std::size_t{0});
 }
 
-C2D_TEST(Cursor, TruncatedUlebIsRejected) {
+STELLAR_TEST(Cursor, TruncatedUlebIsRejected) {
   // 0x80 means "continues" but the buffer ends: must not spin or read past.
   const std::uint8_t buf[2] = {0x80, 0x80};
   util::Cursor c(buf, sizeof(buf));
@@ -96,7 +96,7 @@ C2D_TEST(Cursor, TruncatedUlebIsRejected) {
 // unit headers
 // ---------------------------------------------------------------------------
 
-C2D_TEST(UnitHeader, V4LengthExcludesTheLengthFieldItself) {
+STELLAR_TEST(UnitHeader, V4LengthExcludesTheLengthFieldItself) {
   // Regression guard for the classic off-by-4: unit_length counts everything
   // after the length field, so a 2-unit .debug_info must place unit 1 at
   // 4 + unit_length, not 11 + unit_length.
@@ -123,7 +123,7 @@ C2D_TEST(UnitHeader, V4LengthExcludesTheLengthFieldItself) {
   EXPECT_EQ(h1.die_start, h0.die_end + 11);
 }
 
-C2D_TEST(UnitHeader, Dwarf64UsesTheFfffffffMarker) {
+STELLAR_TEST(UnitHeader, Dwarf64UsesTheFfffffffMarker) {
   std::vector<RawDie> dies = {{1, {}}, {0, {}}};
   auto u = build_unit_dwarf64(4, 8, 0, dies);
   const util::ByteView info(u.data(), u.size());
@@ -137,7 +137,7 @@ C2D_TEST(UnitHeader, Dwarf64UsesTheFfffffffMarker) {
   EXPECT_EQ(h.die_start, std::uint64_t{23});
 }
 
-C2D_TEST(UnitHeader, V5HeaderLayoutIsReordered) {
+STELLAR_TEST(UnitHeader, V5HeaderLayoutIsReordered) {
   std::vector<RawDie> dies = {{1, {}}, {0, {}}};
   auto u = build_unit_v5(dwarf::utype::kCompile, 8, 0, dies);
   const util::ByteView info(u.data(), u.size());
@@ -149,7 +149,7 @@ C2D_TEST(UnitHeader, V5HeaderLayoutIsReordered) {
   EXPECT_EQ(h.die_start, std::uint64_t{12});  // 4 + 2 + 1 + 1 + 4
 }
 
-C2D_TEST(UnitHeader, RejectsTruncatedAndReservedInput) {
+STELLAR_TEST(UnitHeader, RejectsTruncatedAndReservedInput) {
   // Too short to hold a header.
   const std::uint8_t tiny[3] = {0x10, 0, 0};
   dwarf::UnitHeader h{};
@@ -172,7 +172,7 @@ C2D_TEST(UnitHeader, RejectsTruncatedAndReservedInput) {
                                  h, &err));
 }
 
-C2D_TEST(UnitHeader, RejectsImplausibleAddressSize) {
+STELLAR_TEST(UnitHeader, RejectsImplausibleAddressSize) {
   Bytes b;
   b.u32(20);
   b.u16(4);
@@ -190,7 +190,7 @@ C2D_TEST(UnitHeader, RejectsImplausibleAddressSize) {
 // abbreviation tables
 // ---------------------------------------------------------------------------
 
-C2D_TEST(Abbrev, ParsesTagsChildrenAndAttributeList) {
+STELLAR_TEST(Abbrev, ParsesTagsChildrenAndAttributeList) {
   std::vector<AbbrevSpec> specs = {
       {1, dwarf::tag::kCompileUnit, true,
        {{aat::kProducer, form::kStrp, 0}, {aat::kLanguage, form::kData2, 0},
@@ -216,7 +216,7 @@ C2D_TEST(Abbrev, ParsesTagsChildrenAndAttributeList) {
   EXPECT_EQ(t.get(1).attrs[1].form, static_cast<uint64_t>(dwarf::form::kData2));
 }
 
-C2D_TEST(Abbrev, ImplicitConstCarriesItsValueInTheAbbrev) {
+STELLAR_TEST(Abbrev, ImplicitConstCarriesItsValueInTheAbbrev) {
   // DW_FORM_implicit_const must consume a SLEB in the abbreviation and zero
   // bytes in the DIE -- a very easy thing to get wrong when skipping DIEs.
   std::vector<AbbrevSpec> specs = {{1, dwarf::tag::kEnumerator, false,
@@ -230,7 +230,7 @@ C2D_TEST(Abbrev, ImplicitConstCarriesItsValueInTheAbbrev) {
   EXPECT_EQ(t.get(1).attrs[1].implicit_const, std::int64_t{-3});
 }
 
-C2D_TEST(Abbrev, FinaliseComputesFixedSizeOnlyWhenAllFormsAreFixed) {
+STELLAR_TEST(Abbrev, FinaliseComputesFixedSizeOnlyWhenAllFormsAreFixed) {
   std::vector<AbbrevSpec> specs = {
       {1, dwarf::tag::kMember, false,
        {{aat::kName, form::kStrp, 0}, {aat::kType, form::kRef4, 0},
@@ -250,14 +250,14 @@ C2D_TEST(Abbrev, FinaliseComputesFixedSizeOnlyWhenAllFormsAreFixed) {
   EXPECT_FALSE(t.get(2).size_known);
 }
 
-C2D_TEST(Abbrev, RejectsOffsetPastEndOfSection) {
+STELLAR_TEST(Abbrev, RejectsOffsetPastEndOfSection) {
   const std::uint8_t buf[2] = {0, 0};
   dwarf::AbbrevTable t;
   std::string err;
   EXPECT_FALSE(t.parse(util::ByteView(buf, sizeof(buf)), 100, util::Endian::Little, &err));
 }
 
-C2D_TEST(FormSize, MatchesTheDwarfSpecification) {
+STELLAR_TEST(FormSize, MatchesTheDwarfSpecification) {
   std::uint64_t n = 0;
   EXPECT_TRUE(dwarf::form_size(dwarf::form::kData1, 8, 4, n));
   EXPECT_EQ(n, std::uint64_t{1});
@@ -289,7 +289,7 @@ C2D_TEST(FormSize, MatchesTheDwarfSpecification) {
   EXPECT_FALSE(dwarf::form_size(0x99, 8, 4, n));
 }
 
-C2D_TEST(FormClassification, IdentifiesUnitRelativeAndIndexedForms) {
+STELLAR_TEST(FormClassification, IdentifiesUnitRelativeAndIndexedForms) {
   EXPECT_TRUE(dwarf::is_unit_relative_ref(dwarf::form::kRef1));
   EXPECT_TRUE(dwarf::is_unit_relative_ref(dwarf::form::kRef4));
   EXPECT_TRUE(dwarf::is_unit_relative_ref(dwarf::form::kRefUdata));
@@ -309,7 +309,7 @@ namespace {
 
 /// Builds a fixture ELF in `path` and returns it (or an empty vector on error).
 std::vector<std::uint8_t> make_fixture(const std::string& path) {
-  using namespace c2d::dwarf;
+  using namespace stellar::dwarf;
   // DWARF4, address size 8.  Table 0:
   //   1 = compile_unit (children) {name strp, language data2, low_pc addr}
   //   2 = base_type       {name strp, encoding data1, byte_size data1}
@@ -327,7 +327,7 @@ std::vector<std::uint8_t> make_fixture(const std::string& path) {
        {{aat::kName, form::kStrp}, {aat::kType, form::kRef4}, {aat::kDataMemberLocation, form::kData1}}},
       {5, tag::kTypedef, false, {{aat::kName, form::kStrp}, {aat::kType, form::kRef4}}},
   };
-  c2d::test::DebugSections dbg;
+  stellar::test::DebugSections dbg;
   dbg.abbrev = build_abbrev(specs);
 
   Bytes str;
@@ -407,15 +407,15 @@ std::vector<std::uint8_t> make_fixture(const std::string& path) {
     dbg.info[typedef_type_off + i] = static_cast<std::uint8_t>(33 >> (8 * i));
   }
 
-  std::vector<std::uint8_t> file = c2d::test::build_elf(dbg);
-  c2d::test::write_file(path, file);
+  std::vector<std::uint8_t> file = stellar::test::build_elf(dbg);
+  stellar::test::write_file(path, file);
   return file;
 }
 
 }  // namespace
 
-C2D_TEST(EndToEnd, ParsesSyntheticElfAndWalksDies) {
-  const std::string path = c2d::test::temp_path("c2d_fixture_basic.so");
+STELLAR_TEST(EndToEnd, ParsesSyntheticElfAndWalksDies) {
+  const std::string path = stellar::test::temp_path("stellar_fixture_basic.so");
   make_fixture(path);
 
   std::string err;
@@ -488,12 +488,12 @@ C2D_TEST(EndToEnd, ParsesSyntheticElfAndWalksDies) {
   EXPECT_EQ(member_type_refs[0], std::uint64_t{26});
 }
 
-C2D_TEST(EndToEnd, WalksMultipleUnitsAndHonoursScanLimits) {
+STELLAR_TEST(EndToEnd, WalksMultipleUnitsAndHonoursScanLimits) {
   // Two units sharing one abbreviation table, concatenated.
-  using namespace c2d::dwarf;
+  using namespace stellar::dwarf;
   std::vector<AbbrevSpec> specs = {{1, tag::kCompileUnit, false,
                                    {{aat::kName, form::kStrp}}}};
-  c2d::test::DebugSections dbg;
+  stellar::test::DebugSections dbg;
   dbg.abbrev = build_abbrev(specs);
   Bytes str;
   str.cstr("a");
@@ -511,8 +511,8 @@ C2D_TEST(EndToEnd, WalksMultipleUnitsAndHonoursScanLimits) {
   dbg.info = u1;
   dbg.info.insert(dbg.info.end(), u2.begin(), u2.end());
 
-  const std::string path = c2d::test::temp_path("c2d_fixture_two.so");
-  c2d::test::write_file(path, c2d::test::build_elf(dbg));
+  const std::string path = stellar::test::temp_path("stellar_fixture_two.so");
+  stellar::test::write_file(path, stellar::test::build_elf(dbg));
 
   std::string err;
   elf::ElfFile f;
@@ -545,7 +545,7 @@ C2D_TEST(EndToEnd, WalksMultipleUnitsAndHonoursScanLimits) {
   EXPECT_EQ(n, 1);
 }
 
-C2D_TEST(EndToEnd, RejectsGarbageInsteadOfCrashing) {
+STELLAR_TEST(EndToEnd, RejectsGarbageInsteadOfCrashing) {
   // Every one of these is a malformed input; the contract is "report an error",
   // never crash or read out of bounds.
   const std::vector<std::vector<std::uint8_t>> bad = {
@@ -563,10 +563,10 @@ C2D_TEST(EndToEnd, RejectsGarbageInsteadOfCrashing) {
   }
 }
 
-C2D_TEST(EndToEnd, ElfRejectsNonElfInput) {
-  const std::string path = c2d::test::temp_path("c2d_not_an_elf.bin");
+STELLAR_TEST(EndToEnd, ElfRejectsNonElfInput) {
+  const std::string path = stellar::test::temp_path("stellar_not_an_elf.bin");
   const std::vector<std::uint8_t> junk(256, 0x41);
-  EXPECT_TRUE(c2d::test::write_file(path, junk));
+  EXPECT_TRUE(stellar::test::write_file(path, junk));
   elf::ElfFile f;
   std::string err;
   EXPECT_FALSE(f.open(path, &err));

@@ -11,9 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "c2d/dwarf/constants.h"
+#include "stellar/dwarf/constants.h"
 
-namespace c2d::test {
+namespace stellar::test {
 
 /// Minimal LE byte assembler with DWARF's LEB128 encodings.
 class Bytes {
@@ -150,4 +150,4 @@ std::string temp_path(const char* name);
 /// on machines without the 583 MB input.
 std::string real_binary_path();
 
-}  // namespace c2d::test
+}  // namespace stellar::test

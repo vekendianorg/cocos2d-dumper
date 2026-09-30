@@ -13,7 +13,7 @@
 #include <string_view>
 #include <vector>
 
-namespace c2d::test {
+namespace stellar::test {
 
 struct Case {
   const char* suite;
@@ -86,52 +86,52 @@ inline int run_all(std::string_view filter, std::string_view exclude = {}) {
   return failure_count() == 0 ? 0 : 1;
 }
 
-}  // namespace c2d::test
+}  // namespace stellar::test
 
-#define C2D_TEST(suite_, name_)                                                  \
+#define STELLAR_TEST(suite_, name_)                                                  \
   static void suite_##_##name_##_body();                                         \
-  static ::c2d::test::Registrar suite_##_##name_##_reg(#suite_, #name_,          \
+  static ::stellar::test::Registrar suite_##_##name_##_reg(#suite_, #name_,          \
                                                      &suite_##_##name_##_body);   \
   static void suite_##_##name_##_body()
 
 #define EXPECT_TRUE(expr)                                                        \
   do {                                                                            \
-    if (!(expr)) ::c2d::test::report_failure(__FILE__, __LINE__, #expr, "");     \
+    if (!(expr)) ::stellar::test::report_failure(__FILE__, __LINE__, #expr, "");     \
   } while (0)
 
 #define EXPECT_FALSE(expr)                                                       \
   do {                                                                            \
     if (static_cast<bool>(expr))                                                  \
-      ::c2d::test::report_failure(__FILE__, __LINE__, "!(" #expr ")", "");        \
+      ::stellar::test::report_failure(__FILE__, __LINE__, "!(" #expr ")", "");        \
   } while (0)
 
 #define EXPECT_EQ(a, b)                                                          \
   do {                                                                            \
-    const auto c2d_a_ = (a);                                                      \
-    const auto c2d_b_ = (b);                                                      \
-    if (!(c2d_a_ == c2d_b_)) {                                                    \
-      ::c2d::test::report_failure(__FILE__, __LINE__, #a " == " #b,              \
+    const auto stellar_a_ = (a);                                                      \
+    const auto stellar_b_ = (b);                                                      \
+    if (!(stellar_a_ == stellar_b_)) {                                                    \
+      ::stellar::test::report_failure(__FILE__, __LINE__, #a " == " #b,              \
                                  "values differ");                                \
     }                                                                             \
   } while (0)
 
 #define EXPECT_NE(a, b)                                                          \
   do {                                                                            \
-    const auto c2d_a_ = (a);                                                      \
-    const auto c2d_b_ = (b);                                                      \
-    if (c2d_a_ == c2d_b_) {                                                       \
-      ::c2d::test::report_failure(__FILE__, __LINE__, #a " != " #b,              \
+    const auto stellar_a_ = (a);                                                      \
+    const auto stellar_b_ = (b);                                                      \
+    if (stellar_a_ == stellar_b_) {                                                       \
+      ::stellar::test::report_failure(__FILE__, __LINE__, #a " != " #b,              \
                                  "values equal");                                 \
     }                                                                             \
   } while (0)
 
 #define EXPECT_STREQ(a, b)                                                        \
   do {                                                                            \
-    const std::string c2d_a_ = (a);                                               \
-    const std::string c2d_b_ = (b);                                               \
-    if (c2d_a_ != c2d_b_) {                                                       \
-      ::c2d::test::report_failure(__FILE__, __LINE__, #a " == " #b,              \
-                                 "\"" + c2d_a_ + "\" != \"" + c2d_b_ + "\"");   \
+    const std::string stellar_a_ = (a);                                               \
+    const std::string stellar_b_ = (b);                                               \
+    if (stellar_a_ != stellar_b_) {                                                       \
+      ::stellar::test::report_failure(__FILE__, __LINE__, #a " == " #b,              \
+                                 "\"" + stellar_a_ + "\" != \"" + stellar_b_ + "\"");   \
     }                                                                             \
   } while (0)
 
@@ -139,9 +139,9 @@ inline int run_all(std::string_view filter, std::string_view exclude = {}) {
 /// walk unexpectedly produced the wrong number of DIEs.
 #define ASSERT_EQ_SIZE(container, n_)                                             \
   do {                                                                            \
-    const std::size_t c2d_n_ = (n_);                                              \
-    if ((container).size() != c2d_n_) {                                           \
-      ::c2d::test::report_failure(__FILE__, __LINE__,                              \
+    const std::size_t stellar_n_ = (n_);                                              \
+    if ((container).size() != stellar_n_) {                                           \
+      ::stellar::test::report_failure(__FILE__, __LINE__,                              \
                                  #container ".size() == " #n_,                    \
                                  "actual size = " + std::to_string((container).size())); \
       return;                                                                     \
@@ -151,7 +151,7 @@ inline int run_all(std::string_view filter, std::string_view exclude = {}) {
 #define ASSERT_TRUE(cond)                                                     \
   do {                                                                        \
     if (!(cond)) {                                                             \
-      ::c2d::test::report_failure(__FILE__, __LINE__, #cond, "required");      \
+      ::stellar::test::report_failure(__FILE__, __LINE__, #cond, "required");      \
       return;                                                                 \
     }                                                                         \
   } while (0)

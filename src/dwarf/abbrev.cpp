@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/dwarf/abbrev.h"
+#include "stellar/dwarf/abbrev.h"
 
 #include <cstdio>
 
-#include "c2d/dwarf/constants.h"
+#include "stellar/dwarf/constants.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 namespace {
 std::string at(std::uint64_t off) {
   char buf[96];
@@ -142,4 +142,4 @@ const AbbrevTable* AbbrevCache::get(util::ByteView abbrev, std::uint64_t offset,
   return &e.table;
 }
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

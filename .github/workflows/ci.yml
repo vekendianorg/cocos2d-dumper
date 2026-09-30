@@ -67,8 +67,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           # /bin/ls is an ELF64 shared object on Ubuntu and always present.
-          ./build/release/c2d info /bin/ls | head -20
-          ./build/release/c2d info /bin/ls | grep -q 'ELF64'
+          ./build/release/stellar info /bin/ls | head -20
+          ./build/release/stellar info /bin/ls | grep -q 'ELF64'
 
   # The version compiled into the binary must match the release tag, so
   # `--version` can never quietly report a stale release again.

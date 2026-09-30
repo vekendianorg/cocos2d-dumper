@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/diag/log.h"
+#include "stellar/diag/log.h"
 
 #include <cstdarg>
 #include <cstring>
 
-namespace c2d::diag {
+namespace stellar::diag {
 namespace {
 const char* short_file(const char* path) {
   const char* slash = std::strrchr(path, '/');
@@ -59,4 +59,4 @@ void Log::emitf(Level l, const char* file, int line, const char* fmt, ...) {
   std::fprintf(stderr, "[%s] %s:%d: %s\n", level_tag(l), short_file(file), line, buf);
 }
 
-}  // namespace c2d::diag
+}  // namespace stellar::diag

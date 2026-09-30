@@ -17,7 +17,7 @@
 #include <string_view>
 #include <type_traits>
 
-namespace c2d::util {
+namespace stellar::util {
 
 enum class Endian { Little, Big };
 
@@ -305,5 +305,5 @@ class Cursor {
 /// Human-readable size (e.g. "194.4 MB") for the reporting layer.
 [[nodiscard]] std::string human_size(std::uint64_t bytes);
 
-}  // namespace c2d::util
+}  // namespace stellar::util
 

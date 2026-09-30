@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// c2d -- native ELF/DWARF dumper.
+// Stellar -- native ELF/DWARF dumper.
 //
 // ELF validation, DWARF unit discovery, streaming DIE traversal, model
 // construction and C# dump generation.
@@ -17,33 +17,33 @@
 #include <string>
 #include <vector>
 
-#include "c2d/diag/log.h"
-#include "c2d/diag/metrics.h"
-#include "c2d/diag/progress.h"
-#include "c2d/dwarf/constants.h"
-#include "c2d/dwarf/dwarf_context.h"
-#include "c2d/elf/elf_file.h"
-#include "c2d/ir/build.h"
-#include "c2d/output/emit.h"
-#include "c2d/util/bytes.h"
+#include "stellar/diag/log.h"
+#include "stellar/diag/metrics.h"
+#include "stellar/diag/progress.h"
+#include "stellar/dwarf/constants.h"
+#include "stellar/dwarf/dwarf_context.h"
+#include "stellar/elf/elf_file.h"
+#include "stellar/ir/build.h"
+#include "stellar/output/emit.h"
+#include "stellar/util/bytes.h"
 
 // Single source of truth for the version: CMake passes these in.
-#ifndef C2D_VERSION
-#define C2D_VERSION "0.0.0-dev"
+#ifndef STELLAR_VERSION
+#define STELLAR_VERSION "0.0.0-dev"
 #endif
-#ifndef C2D_VERSION_MAJOR
-#define C2D_VERSION_MAJOR 0
+#ifndef STELLAR_VERSION_MAJOR
+#define STELLAR_VERSION_MAJOR 0
 #endif
-#ifndef C2D_VERSION_MINOR
-#define C2D_VERSION_MINOR 0
+#ifndef STELLAR_VERSION_MINOR
+#define STELLAR_VERSION_MINOR 0
 #endif
-#ifndef C2D_VERSION_PATCH
-#define C2D_VERSION_PATCH 0
+#ifndef STELLAR_VERSION_PATCH
+#define STELLAR_VERSION_PATCH 0
 #endif
 
 namespace {
 
-using namespace c2d;
+using namespace stellar;
 
 struct Options {
   std::string command;
@@ -97,14 +97,14 @@ ir::Model metrics_model_;
 
 void usage() {
   std::printf(
-      "c2d " C2D_VERSION " -- native ELF/DWARF dumper\n"
+      "Stellar " STELLAR_VERSION " -- native ELF/DWARF dumper\n"
       "\n"
       "Usage:\n"
-      "  c2d info   [options] <elf>        ELF + DWARF summary\n"
-      "  c2d units  [options] <elf>        enumerate compilation units\n"
-      "  c2d scan   [options] <elf>        walk DIEs, count tags, measure speed\n"
-      "  c2d dump   [options] <elf>        print the DIE tree of one unit\n"
-      "  c2d emit   [options] <elf>        build the model and write the dump\n"
+      "  stellar info   [options] <elf>        ELF + DWARF summary\n"
+      "  stellar units  [options] <elf>        enumerate compilation units\n"
+      "  stellar scan   [options] <elf>        walk DIEs, count tags, measure speed\n"
+      "  stellar dump   [options] <elf>        print the DIE tree of one unit\n"
+      "  stellar emit   [options] <elf>        build the model and write the dump\n"
       "\n"
       "Options:\n"
       "  --max-units N      stop after N units (0 = all)\n"
@@ -130,12 +130,12 @@ void usage() {
       "  -h, --help         this text\n"
       "\n"
       "Examples:\n"
-      "  c2d info  libcocos2dcpp_1.74.2.so\n"
-      "  c2d scan  --max-units 20 --tags --stats libcocos2dcpp_1.74.2.so\n"
-      "  c2d scan  --unit-stride 100 --stats libcocos2dcpp_1.74.2.so\n"
-      "  c2d dump  --unit 0 --max-print 200 libcocos2dcpp_1.74.2.so\n"
-      "  c2d emit  --stats libcocos2dcpp_1.74.2.so\n"
-      "  c2d emit  --stats -o /tmp/small.cs --max-lines 50000 libcocos2dcpp_1.74.2.so\n");
+      "  stellar info  libcocos2dcpp_1.74.2.so\n"
+      "  stellar scan  --max-units 20 --tags --stats libcocos2dcpp_1.74.2.so\n"
+      "  stellar scan  --unit-stride 100 --stats libcocos2dcpp_1.74.2.so\n"
+      "  stellar dump  --unit 0 --max-print 200 libcocos2dcpp_1.74.2.so\n"
+      "  stellar emit  --stats libcocos2dcpp_1.74.2.so\n"
+      "  stellar emit  --stats -o /tmp/small.cs --max-lines 50000 libcocos2dcpp_1.74.2.so\n");
 }
 
 bool parse_u64(const char* s, std::uint64_t& out) {
@@ -322,7 +322,7 @@ int cmd_info(const elf::ElfFile& elf) {
   dwarf::DwarfContext ctx(elf);
   std::printf("compilation units: %llu\n",
               static_cast<unsigned long long>(ctx.unit_count()));
-  std::printf("\n(use `c2d units` for per-unit detail, `c2d scan` to traverse DIEs)\n");
+  std::printf("\n(use `stellar units` for per-unit detail, `stellar scan` to traverse DIEs)\n");
   return 0;
 }
 
@@ -533,7 +533,7 @@ std::string summary_line(const char* mode, const std::string& path, double secs,
   const std::uint64_t methods = bs.methods;
   const char* dies_label = bs.units != 0 ? "DIEs" : "FDEs";
   std::snprintf(buf, sizeof(buf),
-                "c2d: done (%s) %s in %.1fs -- %s units, %s %s, %s types, %s fields, "
+                "stellar: done (%s) %s in %.1fs -- %s units, %s %s, %s types, %s fields, "
                 "%s methods -> %s lines, %s",
                 mode, path.c_str(), secs, num(units).c_str(), num(dies).c_str(), dies_label,
                 num(types).c_str(), num(fields).c_str(), num(methods).c_str(),
@@ -702,8 +702,8 @@ int main(int argc, char** argv) {
   if (o.command == "version") {
     // Reported as both a dotted version and a semver string so packaging and
     // humans get what they expect.
-    std::printf("%s\n", C2D_VERSION);
-    std::printf("c2d %d.%d.%d\n", C2D_VERSION_MAJOR, C2D_VERSION_MINOR, C2D_VERSION_PATCH);
+    std::printf("%s\n", STELLAR_VERSION);
+    std::printf("Stellar %d.%d.%d\n", STELLAR_VERSION_MAJOR, STELLAR_VERSION_MINOR, STELLAR_VERSION_PATCH);
     return 0;
   }
   if (!diag::Log::set_level_from_string(o.log_level)) {
@@ -718,7 +718,7 @@ int main(int argc, char** argv) {
 
   const auto t_start = diag::Clock::now();
   diag::Metrics metrics;
-  metrics.set_label("c2d " + o.command + " " + o.path);
+  metrics.set_label("stellar " + o.command + " " + o.path);
 
   // --- open + validate the container --------------------------------------
   const auto t_open = diag::Clock::now();
@@ -729,7 +729,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   metrics.add_phase("open", diag::seconds_since(t_open), 1, elf.file_size());
-  C2D_DEBUG("%s: %s", elf.path().c_str(), elf.describe().c_str());
+  STELLAR_DEBUG("%s: %s", elf.path().c_str(), elf.describe().c_str());
 
   if (o.command == "info") {
     const int rc = cmd_info(elf);

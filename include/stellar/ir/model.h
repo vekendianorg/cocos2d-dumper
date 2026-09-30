@@ -20,9 +20,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "c2d/dwarf/constants.h"
+#include "stellar/dwarf/constants.h"
 
-namespace c2d::ir {
+namespace stellar::ir {
 
 /// Sentinel for "no referenced type".
 inline constexpr std::uint32_t kNoType = 0xFFFFFFFFu;
@@ -323,4 +323,4 @@ class Model {
 
 enum class AggregateKind : std::uint8_t { kStruct, kClass, kUnion };
 
-}  // namespace c2d::ir
+}  // namespace stellar::ir

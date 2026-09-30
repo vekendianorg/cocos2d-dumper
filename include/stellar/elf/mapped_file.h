@@ -12,9 +12,9 @@
 #include <cstdint>
 #include <string>
 
-#include "c2d/util/bytes.h"
+#include "stellar/util/bytes.h"
 
-namespace c2d::elf {
+namespace stellar::elf {
 
 class MappedFile {
  public:
@@ -61,4 +61,4 @@ class MappedFile {
   std::string path_;
 };
 
-}  // namespace c2d::elf
+}  // namespace stellar::elf

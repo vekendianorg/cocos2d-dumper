@@ -9,13 +9,13 @@
 #include <string>
 #include <vector>
 
-#include "c2d/dwarf/dwarf_context.h"
-#include "c2d/ir/build.h"
-#include "c2d/output/emit.h"
+#include "stellar/dwarf/dwarf_context.h"
+#include "stellar/ir/build.h"
+#include "stellar/output/emit.h"
 #include "fixture_builder.h"
 #include "test_framework.h"
 
-using namespace c2d;
+using namespace stellar;
 
 namespace {
 
@@ -112,7 +112,7 @@ ir::Model make_test_model() {
 
 }  // namespace
 
-C2D_TEST(Ir, TypeIndexIsAnOpenAddressedTable) {
+STELLAR_TEST(Ir, TypeIndexIsAnOpenAddressedTable) {
   ir::Model m;
   m.reserve_type_slots(4);
   ir::Type t;
@@ -125,7 +125,7 @@ C2D_TEST(Ir, TypeIndexIsAnOpenAddressedTable) {
   EXPECT_EQ(m.lookup_type(0), ir::kNoType);
 }
 
-C2D_TEST(Ir, SizeOfInfersThroughQualifiersTypedefsAndArrays) {
+STELLAR_TEST(Ir, SizeOfInfersThroughQualifiersTypedefsAndArrays) {
   ir::Model m = make_test_model();
   // base int = 4, const int = 4, pointer = 8, char[4] = 4
   for (std::size_t i = 0; i < m.types.size(); ++i) (void)m.size_of(static_cast<std::uint32_t>(i));
@@ -144,7 +144,7 @@ C2D_TEST(Ir, SizeOfInfersThroughQualifiersTypedefsAndArrays) {
   EXPECT_EQ(m.size_of(alias), std::uint64_t{4});
 }
 
-C2D_TEST(Ir, TypeNameRendersCSharpStyleNames) {
+STELLAR_TEST(Ir, TypeNameRendersCSharpStyleNames) {
   ir::Model m = make_test_model();
   struct Case {
     ir::TypeKind kind;
@@ -185,7 +185,7 @@ C2D_TEST(Ir, TypeNameRendersCSharpStyleNames) {
   EXPECT_STREQ(m.type_name(ai), "unknown[4]");
 }
 
-C2D_TEST(Ir, DeduplicateKeepsTheMostCompleteDefinition) {
+STELLAR_TEST(Ir, DeduplicateKeepsTheMostCompleteDefinition) {
   g_pool.blob.clear();
   ir::Model m;
   m.string_self = &g_pool;
@@ -217,7 +217,7 @@ C2D_TEST(Ir, DeduplicateKeepsTheMostCompleteDefinition) {
   EXPECT_EQ(m.classes[1].size, std::uint64_t{16});
 }
 
-C2D_TEST(Output, EmitsTheIl2CppShape) {
+STELLAR_TEST(Output, EmitsTheIl2CppShape) {
   ir::Model m = make_test_model();
   m.deduplicate();
   // An enum and a couple of symbols so every section is non-empty.
@@ -262,7 +262,7 @@ C2D_TEST(Output, EmitsTheIl2CppShape) {
 
   output::EmitOptions o;
   o.target_name = "unit-test.so";
-  const std::string path = c2d::test::temp_path("c2d_emit_test.cs");
+  const std::string path = stellar::test::temp_path("stellar_emit_test.cs");
   std::FILE* out = std::fopen(path.c_str(), "wb");
   EXPECT_TRUE(out != nullptr);
   output::EmitStats st;
@@ -277,7 +277,7 @@ C2D_TEST(Output, EmitsTheIl2CppShape) {
     std::fclose(in);
   }
 
-  EXPECT_TRUE(text.find("// VEKENDIAN Cocos2d Dumper Il2cpp-style\n") != std::string::npos);
+  EXPECT_TRUE(text.find("// Stellar Il2cpp-style dump (Cocos2d ELF/DWARF)\n") != std::string::npos);
   EXPECT_TRUE(text.find("public enum Colour // TypeDefIndex: 1 Size: 0x4 "
                         "UnderlyingType: int\n") != std::string::npos);
   EXPECT_TRUE(text.find("    Blue = 7,\n") != std::string::npos);

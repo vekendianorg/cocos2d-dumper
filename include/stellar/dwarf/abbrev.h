@@ -14,9 +14,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "c2d/util/bytes.h"
+#include "stellar/util/bytes.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 /// One attribute specification inside an abbreviation.
 struct AbbrevAttr {
@@ -100,4 +100,4 @@ class AbbrevCache {
   std::size_t misses_ = 0;
 };
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

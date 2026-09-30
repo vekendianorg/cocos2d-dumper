@@ -21,7 +21,7 @@
 #include <string>
 #include <string_view>
 
-namespace c2d::output {
+namespace stellar::output {
 
 /// Rewrites a rendered DWARF type name into managed-style C#.
 std::string normalize_type(std::string_view cxx);
@@ -50,4 +50,4 @@ std::string clean_symbol_name(std::string_view name);
 /// merge two distinct types under one name.
 std::string erase_vendor_namespaces(std::string_view cxx);
 
-}  // namespace c2d::output
+}  // namespace stellar::output

@@ -18,11 +18,11 @@
 #include <cstdint>
 #include <string>
 
-#include "c2d/dwarf/dwarf_context.h"
-#include "c2d/dwarf/eh_frame.h"
-#include "c2d/ir/model.h"
+#include "stellar/dwarf/dwarf_context.h"
+#include "stellar/dwarf/eh_frame.h"
+#include "stellar/ir/model.h"
 
-namespace c2d::ir {
+namespace stellar::ir {
 
 /// DWARF 4 has no standard rvalue-reference tag: clang emits
 /// DW_TAG_reference_type for `T&&`, so the IR folds both into a reference. The
@@ -85,4 +85,4 @@ struct DwarflessStats {
 /// unknown rather than guessing.
 bool build_dwarfless_model(dwarf::DwarfContext& ctx, Model& model, DwarflessStats* stats = nullptr);
 
-}  // namespace c2d::ir
+}  // namespace stellar::ir

@@ -22,7 +22,7 @@
 #include <string>
 #include <string_view>
 
-namespace c2d::diag {
+namespace stellar::diag {
 
 class Progress {
  public:
@@ -131,4 +131,4 @@ class Progress {
 /// in hot loops and should not have to spell out `Progress::instance()`.
 inline Progress& progress() { return Progress::instance(); }
 
-}  // namespace c2d::diag
+}  // namespace stellar::diag

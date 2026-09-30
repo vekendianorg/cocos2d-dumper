@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/elf/mapped_file.h"
+#include "stellar/elf/mapped_file.h"
 
 #include <cerrno>
 #include <cstring>
@@ -14,7 +14,7 @@
 #include <unistd.h>
 #endif
 
-namespace c2d::elf {
+namespace stellar::elf {
 
 MappedFile::~MappedFile() { reset(); }
 
@@ -203,4 +203,4 @@ void MappedFile::advise_sequential() const {}
 void MappedFile::advise_random() const {}
 #endif
 
-}  // namespace c2d::elf
+}  // namespace stellar::elf

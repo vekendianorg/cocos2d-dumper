@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-#include "c2d/ir/model.h"
+#include "stellar/ir/model.h"
 
 #include <cstdio>
 #include <unordered_map>
 
-namespace c2d::ir {
+namespace stellar::ir {
 
 std::uint32_t Model::arena_add(std::string_view s) {
   const std::uint32_t off = static_cast<std::uint32_t>(arena_.size());
@@ -96,7 +96,7 @@ namespace {
 /// Both spellings are needed: clang reports "unsigned int" for `uint`, while a
 /// plain `char` must stay "char" rather than becoming sbyte/byte.
 const char* base_type_name(std::string_view dw, std::uint8_t encoding, std::uint64_t size) {
-  using namespace c2d::dwarf;
+  using namespace stellar::dwarf;
   if (dw == "char" || dw == "signed char" || dw == "unsigned char" || dw == "wchar_t" ||
       dw == "char8_t" || dw == "char16_t" || dw == "char32_t") {
     return "char";
@@ -341,4 +341,4 @@ void Model::deduplicate() {
   unique_enum_names = ebest.size();
 }
 
-}  // namespace c2d::ir
+}  // namespace stellar::ir

@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace c2d::diag {
+namespace stellar::diag {
 
 using Clock = std::chrono::steady_clock;
 
@@ -109,4 +109,4 @@ struct ResourceReport {
 
 [[nodiscard]] ResourceReport resource_report(double wall_seconds);
 
-}  // namespace c2d::diag
+}  // namespace stellar::diag

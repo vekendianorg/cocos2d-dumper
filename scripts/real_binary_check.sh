@@ -6,14 +6,14 @@
 # direct exec and CTest fail there with EACCES.
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-RUN_DIR="${C2D_RUN_DIR:-/tmp/c2d-run}"
+RUN_DIR="${STELLAR_RUN_DIR:-/tmp/stellar-run}"
 
-T="$RUN_DIR/c2d-tests"
+T="$RUN_DIR/stellar-tests"
 if [ -x "$T" ]; then
   exec "$T" --filter=RealBinary
 fi
 if command -v ctest >/dev/null 2>&1 && [ -d "$ROOT/build" ]; then
-  exec ctest --test-dir "$ROOT/build" -R c2d_real_binary --output-on-failure
+  exec ctest --test-dir "$ROOT/build" -R stellar_real_binary --output-on-failure
 fi
-echo "c2d-tests not found; run scripts/build.sh first" >&2
+echo "stellar-tests not found; run scripts/build.sh first" >&2
 exit 1

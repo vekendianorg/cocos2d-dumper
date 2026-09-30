@@ -23,12 +23,12 @@
 #include <type_traits>
 #include <vector>
 
-#include "c2d/dwarf/abbrev.h"
-#include "c2d/dwarf/constants.h"
-#include "c2d/dwarf/sections.h"
-#include "c2d/util/bytes.h"
+#include "stellar/dwarf/abbrev.h"
+#include "stellar/dwarf/constants.h"
+#include "stellar/dwarf/sections.h"
+#include "stellar/util/bytes.h"
 
-namespace c2d::dwarf {
+namespace stellar::dwarf {
 
 /// A parsed .debug_info unit header.
 struct UnitHeader {
@@ -36,7 +36,7 @@ struct UnitHeader {
   std::uint64_t length = 0;      ///< unit_length as stored (excludes length field)
   unsigned length_size = 4;      ///< 4 (DWARF32) or 8 (DWARF64)
   std::uint16_t version = 0;
-  std::uint8_t unit_type = ::c2d::dwarf::utype::kUnknown;
+  std::uint8_t unit_type = ::stellar::dwarf::utype::kUnknown;
   std::uint8_t address_size = 0;
   util::Endian endian = util::Endian::Little;  ///< taken from the ELF container
   std::uint64_t abbrev_offset = 0;
@@ -49,8 +49,8 @@ struct UnitHeader {
   [[nodiscard]] unsigned offset_size() const { return length_size; }
   /// True for units whose DIEs describe types (.debug_types / DWARF5 type units).
   [[nodiscard]] bool is_type_unit() const {
-    return unit_type == ::c2d::dwarf::utype::kType ||
-           unit_type == ::c2d::dwarf::utype::kSplitType;
+    return unit_type == ::stellar::dwarf::utype::kType ||
+           unit_type == ::stellar::dwarf::utype::kSplitType;
   }
   [[nodiscard]] std::uint64_t body_size() const { return die_end - die_start; }
 };
@@ -186,4 +186,4 @@ struct WalkStats {
   std::vector<std::uint64_t> tag_counts = std::vector<std::uint64_t>(0x500, 0);
 };
 
-}  // namespace c2d::dwarf
+}  // namespace stellar::dwarf

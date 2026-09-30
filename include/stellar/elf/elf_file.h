@@ -9,11 +9,11 @@
 #include <string_view>
 #include <vector>
 
-#include "c2d/elf/elf_types.h"
-#include "c2d/elf/mapped_file.h"
-#include "c2d/util/bytes.h"
+#include "stellar/elf/elf_types.h"
+#include "stellar/elf/mapped_file.h"
+#include "stellar/util/bytes.h"
 
-namespace c2d::elf {
+namespace stellar::elf {
 
 /// A parsed section header together with its (resolved) name.
 struct Section {
@@ -143,4 +143,4 @@ class ElfFile {
   std::uint32_t dynsym_shndx_ = 0;
 };
 
-}  // namespace c2d::elf
+}  // namespace stellar::elf

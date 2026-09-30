@@ -6,7 +6,7 @@
 
 #include <cstdint>
 
-namespace c2d::elf {
+namespace stellar::elf {
 
 constexpr std::uint8_t kElfMagic[4] = {0x7f, 'E', 'L', 'F'};
 
@@ -142,4 +142,4 @@ static_assert(sizeof(Sym64) == 24, "Sym64 layout");
 [[nodiscard]] const char* object_type_name(std::uint16_t type);
 [[nodiscard]] const char* section_type_name(std::uint32_t type);
 
-}  // namespace c2d::elf
+}  // namespace stellar::elf

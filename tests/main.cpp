@@ -3,7 +3,7 @@
 #include <cstring>
 #include <string>
 
-#include "c2d/diag/log.h"
+#include "stellar/diag/log.h"
 #include "test_framework.h"
 
 int main(int argc, char** argv) {
@@ -28,9 +28,9 @@ int main(int argc, char** argv) {
     exclude = "RealBinary";
   }
   // Tests exercise the "not found" paths on purpose; keep the noise down.
-  c2d::diag::Log::set_level(c2d::diag::Level::kError);
+  stellar::diag::Log::set_level(stellar::diag::Level::kError);
   if (quiet) {
     std::freopen(nullptr, "w", stdout);
   }
-  return c2d::test::run_all(filter, exclude);
+  return stellar::test::run_all(filter, exclude);
 }

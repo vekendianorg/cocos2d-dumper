@@ -21,22 +21,22 @@
 //
 // The padding entries matter: they make the field list tile the whole object,
 // so a consumer can walk offsets without inferring the gaps.
-#include "c2d/output/emit.h"
+#include "stellar/output/emit.h"
 
-#include "c2d/diag/progress.h"
-#include "c2d/output/normalize.h"
+#include "stellar/diag/progress.h"
+#include "stellar/output/normalize.h"
 
 #include <algorithm>
 #include <unordered_map>
 #include <cstring>
 #include <vector>
 
-namespace c2d::output {
+namespace stellar::output {
 namespace {
 
 using ir::TypeKind;
 
-constexpr std::string_view kHeader1 = "VEKENDIAN Cocos2d Dumper Il2cpp-style";
+constexpr std::string_view kHeader1 = "Stellar Il2cpp-style dump (Cocos2d ELF/DWARF)";
 constexpr std::string_view kHeader2 =
     "Names, types and offsets come from DWARF; where DWARF has no name,";
 constexpr std::string_view kHeader3 =
@@ -518,4 +518,4 @@ void emit_il2cpp(const ir::Model& model, std::FILE* out, const EmitOptions& opts
   if (stats != nullptr) *stats = st;
 }
 
-}  // namespace c2d::output
+}  // namespace stellar::output

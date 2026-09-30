@@ -14,12 +14,12 @@
 //   .eh_frame         from PT_GNU_EH_FRAME, whose header stores an encoded
 //                     pointer to the unwind section
 //   .data.rel.ro     the RELRO PT_LOAD range, which holds vtables and RTTI
-#include "c2d/elf/elf_file.h"
+#include "stellar/elf/elf_file.h"
 
-#include "c2d/diag/log.h"
-#include "c2d/elf/elf_types.h"
+#include "stellar/diag/log.h"
+#include "stellar/elf/elf_types.h"
 
-namespace c2d::elf {
+namespace stellar::elf {
 namespace {
 
 // Values already declared in elf_types.h, referenced with a trailing underscore
@@ -199,7 +199,7 @@ std::size_t ElfFile::recover_sections_from_phdrs() {
           t.index = static_cast<std::uint32_t>(sections_.size());
           add_synthetic_section(t);
           ++added;
-          C2D_INFO("recovered .dynsym (%llu symbols) and .dynstr from PT_DYNAMIC",
+          STELLAR_INFO("recovered .dynsym (%llu symbols) and .dynstr from PT_DYNAMIC",
                    static_cast<unsigned long long>(count));
         }
       }
@@ -243,7 +243,7 @@ std::size_t ElfFile::recover_sections_from_phdrs() {
           s.index = static_cast<std::uint32_t>(sections_.size());
           add_synthetic_section(s);
           ++added;
-          C2D_INFO("recovered .eh_frame at vaddr 0x%llx from PT_GNU_EH_FRAME",
+          STELLAR_INFO("recovered .eh_frame at vaddr 0x%llx from PT_GNU_EH_FRAME",
                    static_cast<unsigned long long>(base_vaddr));
         }
       }
@@ -267,4 +267,4 @@ std::size_t ElfFile::recover_sections_from_phdrs() {
   return added;
 }
 
-}  // namespace c2d::elf
+}  // namespace stellar::elf
