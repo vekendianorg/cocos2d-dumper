@@ -80,12 +80,19 @@ per update, with rendering reusing one buffer.
 ## Usage
 
 ```sh
-stellar info  [options] <elf>     # ELF + DWARF section/capability summary
-stellar units [options] <elf>     # per-unit header + DIE count
-stellar scan  [options] <elf>     # walk DIEs, count tags, measure throughput
-stellar dump  [options] <elf>     # print one unit's DIE tree
-stellar emit  [options] <elf>     # build the model and write the dump
+stellar                          # launch the interactive TUI
+stellar libgame.so               # TUI with the ELF preselected
+stellar info  [options] <elf>    # ELF + DWARF section/capability summary
+stellar units [options] <elf>    # per-unit header + DIE count
+stellar scan  [options] <elf>    # walk DIEs, count tags, measure throughput
+stellar dump  [options] <elf>    # print one unit's DIE tree
+stellar emit  [options] <elf>    # build the model and write the dump
 ```
+
+The TUI is an additional front-end, not a replacement: every subcommand above
+still works exactly as before and remains the right choice for scripting and
+automation. `stellar help` (or `stellar --help`) prints the same reference
+without needing a terminal.
 
 Bounding options keep exploration cheap on a large input:
 
@@ -199,6 +206,43 @@ sort helpers, thunks) are not emitted. A type's own *identity* is left alone:
 a class genuinely called `std::__ndk1::vector<...>` is not renamed to
 `List<...>`, because collapsing it would merge two distinct types.
 
+## The TUI
+
+Bare `stellar` opens a keyboard-driven interface: pick a file, read its ELF and
+DWARF facts, and run a dump while the progress stays live.
+
+```sh
+stellar                            # empty, type a path
+stellar libcocos2dcpp_1.74.2.so    # preselected
+NO_COLOR=1 stellar                 # monochrome
+stellar --no-color                 # the same, as a flag
+```
+
+Screens: **MAIN** (file facts and the action menu), **EMIT** (the dump's
+options), **ANALYSIS** (live progress), **COMPLETE** (the results), **SETTINGS**
+and **INFO** (the TUI twin of `stellar info`). `Q` quits, `Esc` goes back.
+
+Three things it deliberately will not do:
+
+* **It never invents a number.** Every figure on screen comes from a measured
+  value; anything unknown renders as `—`.
+* **It never claims a capability it lacks.** Settings that have no backend
+  (thread and RAM limits, parallel analysis) are shown muted and marked
+  *not applied* rather than pretending to work.
+* **It never relies on colour alone.** State is carried by a glyph — `✓` `!` `✗`
+  `▶` — as well as by hue, so the interface reads on a monochrome terminal.
+
+The dump itself runs on a worker thread, so the interface keeps redrawing and
+stays cancellable while a 30-second build is in progress. Terminal state is owned
+by a single RAII type and restored on normal exit, on an exception, and from
+handlers for `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGSEGV`/`SIGABRT`/`SIGTSTP` — the one
+way to guarantee a stray `Ctrl-C` cannot leave a shell with no cursor.
+
+Colour adapts to the terminal: truecolor, 256-colour and 16-colour are all
+supported, and `NO_COLOR`/`--no-color` emit no escape sequence at all. The
+interface is drawn in Stellar blue with light-blue accents; the STELLAR banner
+keeps its exact artwork and is tinted the same two colours.
+
 ## Architecture
 
 Strict layering; each layer depends only on the ones above it.
@@ -211,8 +255,13 @@ dwarf/   constants, section discovery, abbreviation tables, unit headers,
          streaming DIE walker, .eh_frame                  (no type semantics)
 ir/      type-system intermediate representation and model builder
 output/  C# dump generation
+tui/     theme, banner, terminal, screen buffer, analysis worker, screens
 app/     CLI
 ```
+
+`tui/` is a front-end and nothing more: `tui/analysis.cpp` drives the real
+`elf`/`dwarf`/`ir`/`output` functions on a worker thread and publishes a snapshot,
+and the widgets in `app.cpp` render only what that snapshot contains.
 
 ### Design constraints that shaped the code
 

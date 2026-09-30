@@ -101,7 +101,16 @@ void Progress::reset() {
   primary_ = nullptr;
   stage_.clear();
   note_.clear();
-  std::memset(counters_, 0, sizeof(counters_));
+  // Zero the counters with real stores. This used to be a memset, which is no
+  // longer legal now that the numbers are relaxed atomics -- and it never
+  // reset the labels anyway, since it is a struct with a pointer member.
+  for (auto& c : counters_) {
+    c.label = nullptr;
+    c.value.store(0, std::memory_order_relaxed);
+    c.total.store(0, std::memory_order_relaxed);
+    c.has_total.store(false, std::memory_order_relaxed);
+  }
+  count_ = 0;
   since_check_ = 0;
   dirty_ = false;
 }
@@ -182,6 +191,19 @@ void Progress::add(const char* label, std::uint64_t n) {
       std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch())
           .count());
   if (now - last_draw_ms_ >= interval_ms_) draw();
+}
+
+bool Progress::get(const char* label, std::uint64_t& value, std::uint64_t* total,
+                   bool* has_total) const {
+  const int i = find(label);
+  if (i < 0) return false;
+  const Counter& c = counters_[i];
+  // Relaxed loads: the reader wants the current number, not a synchronised view.
+  // A value one update behind is still the truth, and no reader can tear.
+  value = c.value.load(std::memory_order_relaxed);
+  if (total != nullptr) *total = c.total.load(std::memory_order_relaxed);
+  if (has_total != nullptr) *has_total = c.has_total.load(std::memory_order_relaxed);
+  return true;
 }
 
 bool Progress::primary_value(std::uint64_t& value, std::uint64_t& total) const {

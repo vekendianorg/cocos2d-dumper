@@ -28,11 +28,20 @@ class Progress {
  public:
   /// A counter shown on the status line. `label` must outlive the reporter, so
   /// callers pass string literals rather than built strings.
+  ///
+  /// The numbers are relaxed atomics so that a *reader* on another thread -- the
+  /// TUI, which polls counters while the analysis thread is still inside
+  /// build_model() -- can read a consistent-enough number without a lock. This
+  /// matches the convention already used by diag/metrics.h: relaxed atomics on
+  /// hot paths that must not serialise. Relaxed is the right order because
+  /// these are display counters, not synchronisation: the only requirement is
+  /// that a reader does not observe a torn value, and a value that is a few
+  /// hundred milliseconds stale is still the truth.
   struct Counter {
     const char* label = nullptr;
-    std::uint64_t value = 0;
-    std::uint64_t total = 0;
-    bool has_total = false;
+    std::atomic<std::uint64_t> value{0};
+    std::atomic<std::uint64_t> total{0};
+    std::atomic<bool> has_total{false};
   };
 
   static constexpr std::size_t kMaxCounters = 6;
@@ -68,6 +77,18 @@ class Progress {
   void add(const char* label, std::uint64_t n = 1);
   /// Sets a counter outright and redraws if the interval has elapsed.
   void set(const char* label, std::uint64_t value);
+
+  /// Reads one counter. Safe to call from a thread other than the one running
+  /// the analysis, and specifically safe to call *while* that thread is blocked
+  /// inside a long phase: the counters are relaxed atomics, so the read needs
+  /// no lock and cannot observe a torn value.
+  ///
+  /// This exists for the TUI, which cannot afford a progress bar that freezes
+  /// for the twenty seconds build_model() takes. Returns false when `label` has
+  /// not been declared. `total` and `has_total` are optional.
+  [[nodiscard]] bool get(const char* label, std::uint64_t& value,
+                         std::uint64_t* total = nullptr,
+                         bool* has_total = nullptr) const;
 
   /// Free-form extra text appended after the counters, e.g. the current unit.
   void note(std::string_view text);

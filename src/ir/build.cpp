@@ -846,7 +846,6 @@ bool build_dwarfless_model(DwarfContext& ctx, Model& model, DwarflessStats* stat
     // 201 are real slots once the header is removed.
     cd.vtable_words = s.size / ptr;
     cd.vtable_slots = cd.vtable_words > 2 ? cd.vtable_words - 2 : 0;
-    const auto idx = static_cast<std::int32_t>(model.classes.size());
     model.classes.push_back(cd);
     ++st.classes_from_rtti;
     st.vtable_slots += cd.vtable_slots;

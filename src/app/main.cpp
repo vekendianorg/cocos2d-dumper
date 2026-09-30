@@ -25,6 +25,9 @@
 #include "stellar/elf/elf_file.h"
 #include "stellar/ir/build.h"
 #include "stellar/output/emit.h"
+#include "stellar/tui/app.h"
+#include "stellar/tui/logo.h"
+#include "stellar/tui/theme.h"
 #include "stellar/util/bytes.h"
 
 // Single source of truth for the version: CMake passes these in.
@@ -67,7 +70,19 @@ struct Options {
   std::string progress_mode = "auto";  // auto | always | never
   int progress_interval = 80;
   bool fail_on_low_confidence = false;
+  /// `--no-color`: forces the TUI's monochrome path.
+  bool no_color = false;
+  /// The first positional argument, kept so the TUI dispatch can treat it as a
+  /// preselected input path before the option loop ever runs.
+  std::string first_arg;
 };
+
+/// The subcommands that drive the non-interactive CLI. Anything else in the
+/// first position is an input path, which means "open the TUI with this file".
+bool is_known_command(const std::string& c) {
+  return c == "info" || c == "units" || c == "scan" || c == "dump" ||
+         c == "emit" || c == "help" || c == "version";
+}
 
 /// mkdir -p, for the default output location.
 int ensure_directory(const std::string& path) {
@@ -96,17 +111,37 @@ int ensure_directory(const std::string& path) {
 ir::Model metrics_model_;
 
 void usage() {
+  // The banner comes from the one place that holds it, so the CLI and the TUI
+  // can never drift apart. render_logo() already has the no-colour path: with
+  // colour unavailable it returns the six rows verbatim, with no escape bytes.
+  const tui::Theme theme = tui::Theme::detect(false);
+  std::printf("%s\n", tui::render_logo(theme).c_str());
+  std::printf("\n");
   std::printf(
-      "Stellar " STELLAR_VERSION " -- native ELF/DWARF dumper\n"
+      "Stellar " STELLAR_VERSION " -- native ELF / DWARF Dumper\n");
+  std::printf("%s\n",
+      "A native ELF/DWARF dumper: reconstructs the C++ type model from debug\n"
+      "information and writes an Il2cpp-style C# dump, with a dwarfless mode for\n"
+      "binaries that have been stripped.");
+  std::printf("\n"
+      "USAGE\n"
+      "    stellar\n"
+      "    stellar <elf>\n"
+      "    stellar <command> [options] <elf>\n"
       "\n"
-      "Usage:\n"
-      "  stellar info   [options] <elf>        ELF + DWARF summary\n"
-      "  stellar units  [options] <elf>        enumerate compilation units\n"
-      "  stellar scan   [options] <elf>        walk DIEs, count tags, measure speed\n"
-      "  stellar dump   [options] <elf>        print the DIE tree of one unit\n"
-      "  stellar emit   [options] <elf>        build the model and write the dump\n"
+      "COMMANDS\n"
+      "    info        Show ELF and DWARF information\n"
+      "    units       List compilation units\n"
+      "    scan        Scan and analyze DWARF DIEs\n"
+      "    dump        Dump a compilation unit's DIE tree\n"
+      "    emit        Generate the C# dump\n"
+      "    help        Show this help message\n"
+      "    version     Show version information\n"
       "\n"
-      "Options:\n"
+      "    Bare `stellar`, or `stellar <elf>`, launches the interactive TUI.\n"
+      "\n"
+      "OPTIONS\n");
+  std::printf("%s\n",
       "  --max-units N      stop after N units (0 = all)\n"
       "  --max-dies N       stop after N DIEs overall (0 = all)\n"
       "  --first-unit N     start at unit index N\n"
@@ -126,16 +161,23 @@ void usage() {
       "  --no-methods       do not emit member functions\n"
       "  --max-lines N      cap emitted lines (0 = all)\n"
       "  --build-units N    build the model from only the first N units\n"
+      "  --no-color         disable all colour in the TUI (also honours NO_COLOR)\n"
       "  --log-level LEVEL  trace|debug|info|warn|error|off (default info)\n"
       "  -h, --help         this text\n"
       "\n"
-      "Examples:\n"
+      "EXAMPLES\n"
+      "  stellar\n"
       "  stellar info  libcocos2dcpp_1.74.2.so\n"
       "  stellar scan  --max-units 20 --tags --stats libcocos2dcpp_1.74.2.so\n"
       "  stellar scan  --unit-stride 100 --stats libcocos2dcpp_1.74.2.so\n"
       "  stellar dump  --unit 0 --max-print 200 libcocos2dcpp_1.74.2.so\n"
       "  stellar emit  --stats libcocos2dcpp_1.74.2.so\n"
-      "  stellar emit  --stats -o /tmp/small.cs --max-lines 50000 libcocos2dcpp_1.74.2.so\n");
+      "  stellar emit  --stats -o /tmp/small.cs --max-lines 50000 libcocos2dcpp_1.74.2.so\n"
+      "\n"
+      "Run `stellar <command> --help` for command-specific options.");
+  // Close the banner's colour run so the shell prompt that follows is not
+  // painted in Stellar blue.
+  if (theme.color_enabled()) std::fputs(theme.reset().data(), stdout);
 }
 
 bool parse_u64(const char* s, std::uint64_t& out) {
@@ -148,19 +190,40 @@ bool parse_u64(const char* s, std::uint64_t& out) {
 }
 
 bool parse_args(int argc, char** argv, Options& o) {
-  if (argc < 2) return false;
+  // Bare `stellar` launches the TUI with nothing preselected.
+  if (argc < 2) {
+    o.command = "tui";
+    return true;
+  }
   // Holds the value from a `--opt=value` form until the option consumes it.
   std::string pending_eq_value;
   bool has_pending_eq_value = false;
   std::uint64_t tmp_interval = 0;
   int i = 1;
   o.command = argv[i++];
+  o.first_arg = o.command;
   if (o.command == "-h" || o.command == "--help") {
     o.command = "help";
     return true;
   }
   if (o.command == "-V" || o.command == "--version") {
     o.command = "version";
+    return true;
+  }
+  // Anything that is not a known command is an input path, not a subcommand:
+  // `stellar libfoo.so` opens the TUI with that file preselected. Deciding this
+  // here, before the option loop, is what keeps the existing subcommands'
+  // parsing byte-for-byte unchanged.
+  if (!is_known_command(o.command)) {
+    o.command = "tui";
+    o.path = o.first_arg;
+    // The option loop is skipped for the TUI, so pick up the one flag the
+    // interface itself consumes. Everything else is ignored rather than being
+    // treated as an error, because a bare path is not a subcommand invocation.
+    for (int k = i; k < argc; ++k) {
+      const std::string_view a = argv[k];
+      if (a == "--no-color" || a == "--no-color=true") o.no_color = true;
+    }
     return true;
   }
 
@@ -270,6 +333,11 @@ bool parse_args(int argc, char** argv, Options& o) {
     } else if (a == "--stats") {
       has_pending_eq_value = false;
       o.stats = true;
+    } else if (a == "--no-color") {
+      // The TUI's monochrome path. Honoured here so it also works when the flag
+      // reaches a subcommand, even though the CLI itself does not colour.
+      has_pending_eq_value = false;
+      o.no_color = true;
     } else if (a == "--log-level") {
       const char* v = need("--log-level");
       if (v == nullptr) return false;
@@ -698,6 +766,15 @@ int main(int argc, char** argv) {
   if (o.command == "help") {
     usage();
     return 0;
+  }
+  // The TUI is an additional front-end, not a replacement: every subcommand
+  // below is unchanged and still reachable for scripting and automation.
+  if (o.command == "tui") {
+    tui::App app;
+    tui::App::Options opts;
+    opts.no_color = o.no_color;
+    opts.initial_path = o.path;
+    return app.run(opts);
   }
   if (o.command == "version") {
     // Reported as both a dotted version and a semver string so packaging and

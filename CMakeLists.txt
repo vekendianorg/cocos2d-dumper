@@ -74,6 +74,14 @@ add_library(stellar STATIC
   src/ir/build.cpp
   src/output/emit_il2cpp.cpp
   src/output/normalize.cpp
+  # tui/ : the interactive frontend. It is a frontend over the library above and
+  # holds no analysis logic of its own; analysis.cpp drives the real core.
+  src/tui/theme.cpp
+  src/tui/logo.cpp
+  src/tui/terminal.cpp
+  src/tui/screen.cpp
+  src/tui/analysis.cpp
+  src/tui/app.cpp
 )
 target_include_directories(stellar PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   # Must come after add_library(stellar): the target does not exist until then,
@@ -82,6 +90,13 @@ target_include_directories(stellar PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 if(WIN32)
   target_link_libraries(stellar PUBLIC psapi)
 endif()
+
+# The TUI runs the analysis on a worker thread so the interface stays
+# responsive during a 30-second dump, which makes threads a real dependency
+# rather than an optimisation.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+target_link_libraries(stellar PUBLIC Threads::Threads)
 
 target_link_libraries(stellar PUBLIC stellar_flags)
 

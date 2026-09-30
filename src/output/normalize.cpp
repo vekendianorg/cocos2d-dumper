@@ -92,15 +92,6 @@ bool is_droppable(std::string_view base) {
   return std::find(std::begin(kNames), std::end(kNames), base) != std::end(kNames);
 }
 
-std::string join(const std::vector<std::string>& parts, std::string_view sep) {
-  std::string out;
-  for (std::size_t i = 0; i < parts.size(); ++i) {
-    if (i != 0) out.append(sep);
-    out.append(parts[i]);
-  }
-  return out;
-}
-
 /// One rewrite pass. `drop_refs` strips `*`/`&` markers (signatures only).
 std::string rewrite(std::string_view in, bool drop_refs, int depth);
 

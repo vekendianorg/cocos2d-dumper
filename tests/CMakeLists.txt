@@ -7,6 +7,7 @@ add_executable(stellar-tests
   test_dwarfless.cpp
   test_normalize.cpp
   test_progress.cpp
+  test_tui.cpp
 )
 target_link_libraries(stellar-tests PRIVATE stellar)
 target_include_directories(stellar-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
