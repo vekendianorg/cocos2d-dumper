@@ -262,15 +262,15 @@ C2D_TEST(Output, EmitsTheIl2CppShape) {
 
   output::EmitOptions o;
   o.target_name = "unit-test.so";
-  const char* path = "/tmp/c2d_emit_test.cs";
-  std::FILE* out = std::fopen(path, "wb");
+  const std::string path = c2d::test::temp_path("c2d_emit_test.cs");
+  std::FILE* out = std::fopen(path.c_str(), "wb");
   EXPECT_TRUE(out != nullptr);
   output::EmitStats st;
   output::emit_il2cpp(m, out, o, &st);
   std::fclose(out);
 
   std::string text;
-  if (std::FILE* in = std::fopen(path, "rb")) {
+  if (std::FILE* in = std::fopen(path.c_str(), "rb")) {
     char buf[8192];
     std::size_t n;
     while ((n = std::fread(buf, 1, sizeof(buf), in)) > 0) text.append(buf, n);

@@ -30,7 +30,7 @@ void with_stripped_binary(Fn&& fn) {
   dbg.eh_frame_addr = kEhAddr;
   dbg.eh_frame = c2d::test::build_eh_frame(
       {{0x2000, 0x40}, {0x2040, 0x10}, {0x2100, 0x80}}, kEhAddr);
-  const std::string path = "/tmp/c2d_stripped.so";
+  const std::string path = c2d::test::temp_path("c2d_stripped.so");
   c2d::test::write_file(path, c2d::test::build_elf(dbg));
   fn(path);
 }
@@ -120,7 +120,7 @@ C2D_TEST(Dwarfless, DumpCarriesTheWarningBannerAndTierTags) {
     o.inferred = true;
     o.named_functions = st.functions_named;
     o.unnamed_functions = st.functions_sub_;
-    const std::string out_path = "/tmp/c2d_dwarfless.cs";
+    const std::string out_path = c2d::test::temp_path("c2d_dwarfless.cs");
     std::FILE* out = std::fopen(out_path.c_str(), "wb");
     EXPECT_TRUE(out != nullptr);
     output::EmitStats es;
@@ -146,7 +146,7 @@ C2D_TEST(Dwarfless, DwarfModeDumpHasNoWarningBanner) {
   ir::Model m;
   m.inferred = false;
   output::EmitOptions o;  // inferred defaults to false
-  const std::string out_path = "/tmp/c2d_dwarf_mode.cs";
+  const std::string out_path = c2d::test::temp_path("c2d_dwarf_mode.cs");
   std::FILE* out = std::fopen(out_path.c_str(), "wb");
   EXPECT_TRUE(out != nullptr);
   output::EmitStats es;

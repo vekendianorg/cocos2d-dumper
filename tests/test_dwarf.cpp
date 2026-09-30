@@ -415,7 +415,7 @@ std::vector<std::uint8_t> make_fixture(const std::string& path) {
 }  // namespace
 
 C2D_TEST(EndToEnd, ParsesSyntheticElfAndWalksDies) {
-  const std::string path = "/tmp/c2d_fixture_basic.so";
+  const std::string path = c2d::test::temp_path("c2d_fixture_basic.so");
   make_fixture(path);
 
   std::string err;
@@ -511,7 +511,7 @@ C2D_TEST(EndToEnd, WalksMultipleUnitsAndHonoursScanLimits) {
   dbg.info = u1;
   dbg.info.insert(dbg.info.end(), u2.begin(), u2.end());
 
-  const std::string path = "/tmp/c2d_fixture_two.so";
+  const std::string path = c2d::test::temp_path("c2d_fixture_two.so");
   c2d::test::write_file(path, c2d::test::build_elf(dbg));
 
   std::string err;
@@ -564,7 +564,7 @@ C2D_TEST(EndToEnd, RejectsGarbageInsteadOfCrashing) {
 }
 
 C2D_TEST(EndToEnd, ElfRejectsNonElfInput) {
-  const std::string path = "/tmp/c2d_not_an_elf.bin";
+  const std::string path = c2d::test::temp_path("c2d_not_an_elf.bin");
   const std::vector<std::uint8_t> junk(256, 0x41);
   EXPECT_TRUE(c2d::test::write_file(path, junk));
   elf::ElfFile f;

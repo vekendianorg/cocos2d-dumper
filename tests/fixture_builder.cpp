@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <sys/stat.h>  // MSVC provides stat here, but not the S_ISREG macro.
 
+#include <filesystem>
+
 #include "c2d/elf/elf_types.h"
 
 namespace c2d::test {
@@ -221,6 +223,14 @@ std::vector<std::uint8_t> build_eh_frame(const std::vector<EhFunction>& fns,
     out.raw(fde.bytes().data(), fde.bytes().size());
   }
   return out.bytes();
+}
+
+std::string temp_path(const char* name) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  fs::path dir = fs::temp_directory_path(ec);
+  if (ec) dir = fs::current_path();
+  return (dir / name).string();
 }
 
 bool write_file(const std::string& path, const std::vector<std::uint8_t>& bytes) {

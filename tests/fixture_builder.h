@@ -139,6 +139,12 @@ std::vector<std::uint8_t> build_elf(const DebugSections& debug);
 /// Writes `bytes` to `path`; returns false on I/O error.
 bool write_file(const std::string& path, const std::vector<std::uint8_t>& bytes);
 
+/// Absolute path to `name` inside the platform's temporary directory.
+///
+/// Tests must not hardcode "/tmp": that directory does not exist on Windows, so
+/// every fixture write failed there and the ELF could not be reopened.
+std::string temp_path(const char* name);
+
 /// Path of the real target binary, or empty when it is not present.
 /// Tests that need it are skipped rather than failed, so the suite stays green
 /// on machines without the 583 MB input.
