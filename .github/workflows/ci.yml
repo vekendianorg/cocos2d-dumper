@@ -70,6 +70,39 @@ jobs:
           ./build/release/c2d info /bin/ls | head -20
           ./build/release/c2d info /bin/ls | grep -q 'ELF64'
 
+  # The version compiled into the binary must match the release tag, so
+  # `--version` can never quietly report a stale release again.
+  verify-version:
+    name: Verify version matches tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compare project version with the git tag
+        run: |
+          set -euo pipefail
+          declared=$(sed -n 's/^project(.* VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          if [ -z "$declared" ]; then
+            echo "could not read PROJECT_VERSION from CMakeLists.txt" >&2
+            exit 1
+          fi
+          echo "CMakeLists.txt declares: $declared"
+          # On a tag build the tag must match; on a branch build the tag is
+          # simply the most recent release, which is informative rather than
+          # enforced.
+          head=$(git describe --tags --exact-match 2>/dev/null || true)
+          if [ -n "$head" ]; then
+            tagged=${head#v}
+            if [ "$declared" != "$tagged" ]; then
+              echo "version mismatch: CMakeLists.txt says $declared but tag $head says $tagged" >&2
+              exit 1
+            fi
+            echo "matches tag $head"
+          else
+            echo "not a tag build; skipping the equality check"
+          fi
+
   # Android/ARM64, where the sample binary actually comes from. Runs on the
   # project's own hardware via self-hosted runner; skipped when none is attached.
   android-arm64:
