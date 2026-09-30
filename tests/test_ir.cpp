@@ -277,7 +277,7 @@ STELLAR_TEST(Output, EmitsTheIl2CppShape) {
     std::fclose(in);
   }
 
-  EXPECT_TRUE(text.find("// Stellar Il2cpp-style dump (Cocos2d ELF/DWARF)\n") != std::string::npos);
+  EXPECT_TRUE(text.find("// Stellar (Cocos2dcpp Dumper with Il2cpp-style dump)\n") != std::string::npos);
   EXPECT_TRUE(text.find("public enum Colour // TypeDefIndex: 1 Size: 0x4 "
                         "UnderlyingType: int\n") != std::string::npos);
   EXPECT_TRUE(text.find("    Blue = 7,\n") != std::string::npos);

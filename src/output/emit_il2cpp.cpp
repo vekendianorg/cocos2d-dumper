@@ -36,7 +36,7 @@ namespace {
 
 using ir::TypeKind;
 
-constexpr std::string_view kHeader1 = "Stellar Il2cpp-style dump (Cocos2d ELF/DWARF)";
+constexpr std::string_view kHeader1 = "Stellar (Cocos2dcpp Dumper with Il2cpp-style dump)";
 constexpr std::string_view kHeader2 =
     "Names, types and offsets come from DWARF; where DWARF has no name,";
 constexpr std::string_view kHeader3 =

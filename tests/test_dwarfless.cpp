@@ -136,7 +136,7 @@ STELLAR_TEST(Dwarfless, DumpCarriesTheWarningBannerAndTierTags) {
     EXPECT_TRUE(text.find("| TIER:infer") != std::string::npos);
     EXPECT_TRUE(text.find("public static IntPtr sub_2000; // RVA: 0x2000") != std::string::npos);
     // And the DWARF-mode emitter must NOT emit the warning.
-    EXPECT_TRUE(text.find("// Stellar Il2cpp-style dump (Cocos2d ELF/DWARF)") != std::string::npos);
+    EXPECT_TRUE(text.find("// Stellar (Cocos2dcpp Dumper with Il2cpp-style dump)") != std::string::npos);
   });
 }
 
