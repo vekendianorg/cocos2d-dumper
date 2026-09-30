@@ -48,7 +48,13 @@ class MappedFile {
  private:
   void reset() noexcept;
 
+#if defined(_WIN32)
+  // The Windows implementation maps through the Win32 file-mapping API.
+  void* handle_ = nullptr;  ///< HANDLE from CreateFileW
+  void* mapping_ = nullptr; ///< HANDLE from CreateFileMappingW
+#else
   int fd_ = -1;
+#endif
   const std::uint8_t* data_ = nullptr;
   std::size_t size_ = 0;
   bool mapped_ = false;

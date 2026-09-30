@@ -46,6 +46,7 @@ void Progress::configure(bool force, int min_interval_ms) {
   // Only draw over a terminal unless asked: a redirected log would otherwise
   // be one enormous line of carriage returns.
   enabled_ = force || C2D_ISATTY(C2D_FILENO(stderr)) != 0;
+  draw_enabled_ = true;
   last_draw_ms_ = 0;
   since_check_ = kCheckEvery;
   drawn_ = false;
@@ -184,7 +185,7 @@ std::string Progress::render() const {
 }
 
 void Progress::draw() {
-  if (!enabled_) return;
+  if (!enabled_ || !draw_enabled_) return;
   const std::string line = render();
   // Pad to erase whatever the previous, longer, line left behind.
   const std::size_t pad = drawn_ && buffer_.size() < last_len_ ? last_len_ - buffer_.size() : 0;

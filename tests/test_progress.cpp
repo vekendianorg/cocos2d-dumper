@@ -16,6 +16,9 @@ Progress& reporter() {
   Progress& p = Progress::instance();
   p.reset();
   p.configure(/*force=*/true, /*min_interval_ms=*/0);
+  // Count and format, but never write: these tests assert on render() and must
+  // not scribble carriage returns over the test output.
+  p.set_draw_enabled(false);
   return p;
 }
 

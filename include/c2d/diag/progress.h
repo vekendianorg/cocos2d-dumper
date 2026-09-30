@@ -46,6 +46,9 @@ class Progress {
   void configure(bool force, int min_interval_ms);
   void set_enabled(bool on) { enabled_ = on; }
   [[nodiscard]] bool enabled() const { return enabled_; }
+  /// Suppresses drawing while still counting. Used by the tests, which assert
+  /// on render() and would otherwise scribble on stderr.
+  void set_draw_enabled(bool on) { draw_enabled_ = on; }
 
   /// Selects which counter the percentage is taken from (the first one with a
   /// known total, unless named).
@@ -102,6 +105,7 @@ class Progress {
   std::int64_t last_draw_ms_ = 0;
   int interval_ms_ = 80;
   bool enabled_ = false;
+  bool draw_enabled_ = true;
   bool drawn_ = false;
   bool dirty_ = false;
 };

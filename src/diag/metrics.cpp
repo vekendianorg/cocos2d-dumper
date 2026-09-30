@@ -90,10 +90,9 @@ ResourceReport resource_report(double wall_seconds) {
   r.wall_seconds = wall_seconds;
   r.peak_rss_bytes = peak_rss_bytes();
   r.current_rss_bytes = current_rss_bytes();
+#if !defined(_WIN32)
+  // rusage is POSIX; Windows has no equivalent, so user/system time stay 0 there.
   struct rusage ru {};
-#if defined(_WIN32)
-  (void)ru;  // no getrusage on Windows; user/system time stays 0
-#else
   if (getrusage(RUSAGE_SELF, &ru) == 0) {
     r.user_seconds = static_cast<double>(ru.ru_utime.tv_sec) +
                      static_cast<double>(ru.ru_utime.tv_usec) * 1e-6;

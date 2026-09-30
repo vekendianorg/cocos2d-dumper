@@ -9,6 +9,7 @@
 //      executes them hundreds of millions of times on a large binary.
 #pragma once
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
