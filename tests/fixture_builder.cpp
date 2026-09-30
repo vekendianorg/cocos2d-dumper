@@ -3,11 +3,26 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <sys/stat.h>
+#include <sys/stat.h>  // MSVC provides stat here, but not the S_ISREG macro.
 
 #include "c2d/elf/elf_types.h"
 
 namespace c2d::test {
+namespace {
+
+/// S_ISREG is a POSIX macro with no MSVC equivalent, so spell the test out for
+/// the two platforms rather than assuming one spelling of <sys/stat.h>.
+bool is_regular_file(const char* path) {
+  struct stat st {};
+  if (::stat(path, &st) != 0) return false;
+#if defined(_WIN32)
+  return (st.st_mode & _S_IFMT) == _S_IFREG;
+#else
+  return S_ISREG(st.st_mode) != 0;
+#endif
+}
+
+}  // namespace
 
 std::vector<std::uint8_t> build_abbrev(const std::vector<AbbrevSpec>& specs) {
   Bytes out;
@@ -226,11 +241,10 @@ bool write_file(const std::string& path, const std::vector<std::uint8_t>& bytes)
 std::string real_binary_path() {
   const char* env = std::getenv("C2D_REAL_BINARY");
   if (env == nullptr || env[0] == '\0') return {};
-  struct stat st {};
-  if (::stat(env, &st) != 0 || !S_ISREG(st.st_mode)) {
+  if (!is_regular_file(env)) {
     // Allow pointing at a directory that contains the sample.
     const std::string dir = std::string(env) + "/libcocos2dcpp_1.74.2.so";
-    if (::stat(dir.c_str(), &st) == 0 && S_ISREG(st.st_mode)) return dir;
+    if (is_regular_file(dir.c_str())) return dir;
     return {};
   }
   return env;
