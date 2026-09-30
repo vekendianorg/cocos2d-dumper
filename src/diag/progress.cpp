@@ -6,13 +6,17 @@
 
 #if defined(_WIN32)
 #include <io.h>
+#include <windows.h>
 #define C2D_ISATTY _isatty
 #define C2D_FILENO _fileno
 #else
+#include <sys/ioctl.h>
 #include <unistd.h>
 #define C2D_ISATTY isatty
 #define C2D_FILENO fileno
 #endif
+
+#include <cstdlib>
 
 #include "c2d/diag/metrics.h"
 
@@ -34,6 +38,42 @@ void append_thousands(std::string& out, std::uint64_t v) {
   }
 }
 
+/// Columns available on the attached terminal, or 0 when it cannot tell.
+///
+/// Used to clamp the status line so it never wraps.
+int terminal_width() {
+#if defined(_WIN32)
+  CONSOLE_SCREEN_BUFFER_INFO csbi{};
+  if (::GetConsoleScreenBufferInfo(::GetStdHandle(STD_ERROR_HANDLE), &csbi)) {
+    const int w = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    return w > 0 ? w : 0;
+  }
+  return 0;
+#else
+  struct winsize ws {};
+  if (::ioctl(C2D_FILENO(stderr), TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+    return ws.ws_col;
+  }
+  return 0;
+#endif
+}
+
+/// Whether the terminal can erase a line for us. A dumb terminal, or a
+/// redirected stream, gets the space-padding fallback instead.
+bool terminal_supports_ansi() {
+  if (C2D_ISATTY(C2D_FILENO(stderr)) == 0) return false;
+  const char* term = std::getenv("TERM");
+  if (term != nullptr) {
+    const std::string_view t(term);
+    if (t == "dumb") return false;
+  }
+#if defined(_WIN32)
+  return false;  // the Windows console handles the rewrite itself
+#else
+  return true;
+#endif
+}
+
 }  // namespace
 
 Progress& Progress::instance() {
@@ -47,6 +87,9 @@ void Progress::configure(bool force, int min_interval_ms) {
   // be one enormous line of carriage returns.
   enabled_ = force || C2D_ISATTY(C2D_FILENO(stderr)) != 0;
   draw_enabled_ = true;
+  // Only worth detecting when something will actually be drawn.
+  ansi_ = enabled_ && terminal_supports_ansi();
+  width_ = enabled_ ? terminal_width() : 0;
   last_draw_ms_ = 0;
   since_check_ = kCheckEvery;
   drawn_ = false;
@@ -93,8 +136,18 @@ void Progress::primary(const char* label) {
 }
 
 void Progress::stage(std::string_view name) {
+  const bool changed = stage_ != name;
   stage_.assign(name);
   dirty_ = true;
+  if (!changed) return;
+  // A stage change is a milestone worth keeping: finish the in-progress row and
+  // start the new stage on a line of its own, rather than overwriting it.
+  if (drawn_) {
+    std::fputc('\n', stderr);
+    std::fflush(stderr);
+    drawn_ = false;
+    last_len_ = 0;
+  }
   checkpoint();  // stage changes are worth showing immediately
 }
 
@@ -186,17 +239,32 @@ std::string Progress::render() const {
 
 void Progress::draw() {
   if (!enabled_ || !draw_enabled_) return;
-  const std::string line = render();
-  // Pad to erase whatever the previous, longer, line left behind.
-  const std::size_t pad = drawn_ && buffer_.size() < last_len_ ? last_len_ - buffer_.size() : 0;
-  last_len_ = buffer_.size();
-  std::fprintf(stderr, "\r%s%*s", line.c_str(), static_cast<int>(pad), "");
+  std::string line = render();
+
+  // Clamp to the terminal so the line can never wrap. A wrapped status line is
+  // the root cause of the old duplicated text: once the cursor has wrapped onto
+  // a second row, a later carriage return only returns to the start of that row
+  // and the first fragment stays on screen.
+  //
+  // When the width cannot be determined (a pty that reports none, for
+  // instance) fall back to the conventional 80 rather than writing a line of
+  // unbounded length and hoping.
+  const int cols = width_ > 1 ? width_ : 80;
+  if (line.size() > static_cast<std::size_t>(cols - 1)) {
+    line.resize(static_cast<std::size_t>(cols - 1));
+  }
+
+  // Wipe the row first, then write exactly one line. No newline: the next update
+  // replaces this one.
+  clear_line();
+  std::fwrite(line.data(), 1, line.size(), stderr);
   std::fflush(stderr);
+  last_len_ = line.size();
+  drawn_ = true;
+  dirty_ = false;
   last_draw_ms_ = static_cast<std::int64_t>(
       std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch())
           .count());
-  drawn_ = true;
-  dirty_ = false;
 }
 
 void Progress::checkpoint() {
@@ -207,10 +275,25 @@ void Progress::checkpoint() {
 
 void Progress::clear_line() {
   if (!drawn_) return;
-  std::fprintf(stderr, "\r%*s\r", static_cast<int>(last_len_), "");
+  if (ansi_) {
+    // Erase the whole row, whatever is on it, then return to column 0.
+    std::fputs("\x1b[2K\r", stderr);
+  } else {
+    // Fallback for terminals without ANSI, and for output that is redirected:
+    // overwrite the known number of columns with spaces.
+    std::fprintf(stderr, "\r%*s\r", static_cast<int>(last_len_), "");
+  }
   std::fflush(stderr);
   drawn_ = false;
   last_len_ = 0;
+}
+
+void Progress::finish() {
+  if (!drawn_) return;
+  // Close the row before returning, so following output is not written over it.
+  std::fputc('\n', stderr);
+  std::fflush(stderr);
+  clear_line();
 }
 
 void Progress::finish_line(std::string_view line) {

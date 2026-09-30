@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(c2d LANGUAGES CXX VERSION 1.1.0)
+project(c2d LANGUAGES CXX VERSION 1.1.1)
 
 # ---------------------------------------------------------------------------
 # c2d -- native ELF/DWARF dumper

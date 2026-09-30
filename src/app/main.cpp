@@ -394,6 +394,9 @@ int cmd_scan(dwarf::DwarfContext& ctx, const Options& o, diag::Metrics& m) {
     st.bytes_scanned += h.body_size();
     ++st.units;
   }
+  // Stop the in-place line before the report, so the report is not written over
+  // the status text.
+  diag::progress().finish();
   const double elapsed = diag::seconds_since(t0);
 
   std::printf("scanned units   : %llu\n", static_cast<unsigned long long>(st.units));
@@ -605,7 +608,7 @@ int cmd_emit(dwarf::DwarfContext& ctx, const Options& o, diag::Metrics& metrics)
 
   // The human-readable block below goes to stderr too, so the in-place status
   // line has to go first.
-  diag::progress().clear_line();
+  diag::progress().finish();
 
   if (use_dwarfless) {
     // Loud, and on stderr, because stdout is the pipe and stderr is the

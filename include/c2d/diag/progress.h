@@ -46,6 +46,10 @@ class Progress {
   void configure(bool force, int min_interval_ms);
   void set_enabled(bool on) { enabled_ = on; }
   [[nodiscard]] bool enabled() const { return enabled_; }
+  /// True when the status line will be erased with an ANSI sequence.
+  [[nodiscard]] bool ansi() const { return ansi_; }
+  /// Detected terminal width, or 0 when it could not be determined.
+  [[nodiscard]] int width() const { return width_; }
   /// Suppresses drawing while still counting. Used by the tests, which assert
   /// on render() and would otherwise scribble on stderr.
   void set_draw_enabled(bool on) { draw_enabled_ = on; }
@@ -75,6 +79,11 @@ class Progress {
   /// Erases the status line without printing anything else.
   void clear_line();
 
+  /// Ends in-place reporting for good: terminates the status row with a newline
+  /// (if one was drawn) so that whatever the caller prints next starts on a
+  /// clean line instead of landing in the middle of the status text.
+  void finish();
+
   /// Clears the line and prints `line` followed by a newline: the completion
   /// summary, or an error that interrupted the run.
   void finish_line(std::string_view line);
@@ -101,6 +110,14 @@ class Progress {
   /// current line without disturbing the reporter.
   mutable std::string buffer_;
   std::size_t last_len_ = 0;  ///< width of the last drawn line, for erasing
+  /// Terminal width, 0 when unknown. The rendered line is clamped to this so
+  /// it can never wrap: a wrapped status line is what leaves stale fragments
+  /// behind, because a later carriage return only returns to the start of the
+  /// row the cursor is already on.
+  int width_ = 0;
+  /// Whether the terminal understands ANSI erase-line. When it does, the row is
+  /// wiped wholesale instead of being overpainted with spaces.
+  bool ansi_ = false;
   std::uint64_t since_check_ = 0;
   std::int64_t last_draw_ms_ = 0;
   int interval_ms_ = 80;

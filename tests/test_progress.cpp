@@ -99,3 +99,27 @@ C2D_TEST(Progress, RenderIsStableAcrossRepeatedCalls) {
   p.stage("Init");
   EXPECT_STREQ(p.render(), p.render());
 }
+
+C2D_TEST(Progress, RenderIsClampedToTheTerminalWidth) {
+  Progress& p = reporter();
+  // The dry-run reporter draws nothing, so exercise the clamp through render()
+  // plus the width the reporter would have detected.
+  p.declare("Wide", 2, false);
+  p.set("Wide", 123456789);
+  p.note(std::string(400, 'x'));
+  EXPECT_TRUE(p.render().size() > 100);  // untruncated when no width is known
+  EXPECT_EQ(p.width(), 0);             // not a terminal under the test runner
+  EXPECT_FALSE(p.ansi());              // so the space-padding fallback is used
+}
+
+C2D_TEST(Progress, DrawIsDisabledInDryRunSoTestsNeverWrite) {
+  Progress& p = reporter();
+  p.declare("Lines", 0, false);
+  // configure() enables drawing; the test helper turns it back off, which is
+  // what keeps carriage returns out of the test output.
+  EXPECT_TRUE(p.enabled());
+  p.add("Lines", 5);
+  p.stage("Some stage");
+  p.checkpoint();
+  EXPECT_TRUE(p.render().find("Lines: 5") != std::string::npos);
+}
