@@ -17,6 +17,7 @@
 //   * tidy -- the line is erased before any error or summary is printed
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <string>
