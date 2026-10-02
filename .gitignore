@@ -33,6 +33,8 @@ compile_commands.json
 *.apk
 *.oat
 *.vdex
+# Stellar emits its dump as a zip archive; the archive is a build artifact, not source.
+*.zip
 
 # ---- editor / OS noise ----
 .DS_Store
