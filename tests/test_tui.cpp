@@ -63,25 +63,67 @@ constexpr ScreenId kAllScreens[] = {ScreenId::kMain,     ScreenId::kEmit,
                                    ScreenId::kAnalysis, ScreenId::kComplete,
                                    ScreenId::kSettings, ScreenId::kInfo};
 
-/// Splits on '\n'. render() joins rows with '\r\n', so the '\r' is stripped.
+/// Splits a frame into the rows a terminal would actually show.
+///
+/// Two shapes have to be handled, because the renderer emits two: with ANSI on
+/// every row is placed by an absolute cursor move (`CUP`), and with it off rows
+/// are separated by CR LF. Anything that is not a row break -- colour, and the
+/// erase-to-end-of-line that terminates each row -- is dropped, so what comes
+/// back is exactly the visible text.
 std::vector<std::string> lines_of(const std::string& frame) {
   std::vector<std::string> out;
   std::string cur;
-  for (const char c : frame) {
-    if (c == '\n') {
-      if (!cur.empty() && cur.back() == '\r') cur.pop_back();
-      out.push_back(cur);
-      cur.clear();
-    } else {
-      cur.push_back(c);
+  bool started = false;
+  for (std::size_t i = 0; i < frame.size();) {
+    const char c = frame[i];
+    if (c == '\033' && i + 1 < frame.size() && frame[i + 1] == '[') {
+      std::size_t j = i + 2;
+      while (j < frame.size() && !(frame[j] >= '@' && frame[j] <= '~')) ++j;
+      const char final = j < frame.size() ? frame[j] : '\0';
+      if (final == 'H') {  // CUP: the next row begins here
+        if (started) out.push_back(strip_ansi(cur));
+        cur.clear();
+        started = true;
+      }
+      i = (j < frame.size()) ? j + 1 : frame.size();
+      continue;
     }
+    if (c == '\n') {
+      out.push_back(strip_ansi(cur));
+      cur.clear();
+      started = true;
+      ++i;
+      continue;
+    }
+    if (c == '\r') {
+      ++i;
+      continue;
+    }
+    cur.push_back(c);
+    ++i;
   }
-  if (!cur.empty()) {
-    if (cur.back() == '\r') cur.pop_back();
-    out.push_back(cur);
-  }
+  out.push_back(strip_ansi(cur));
   return out;
 }
+/// The most columns render_row will ever write. The terminal's final column is
+/// deliberately left alone, so nothing may legitimately reach index `cols`.
+constexpr std::size_t writable_cols(int cols) {
+  return cols > 1 ? static_cast<std::size_t>(cols - 1) : 1u;
+}
+/// Splits a row into one entry per display cell.
+std::vector<std::string> cells_of(const std::string& row) {
+  std::vector<std::string> cs;
+  for (std::size_t k = 0; k < row.size();) {
+    std::size_t len = 1;
+    const auto b = static_cast<unsigned char>(row[k]);
+    if (b >= 0xF0) len = 4; else if (b >= 0xE0) len = 3; else if (b >= 0xC0) len = 2;
+    if (k + len > row.size()) len = 1;
+    cs.push_back(row.substr(k, len));
+    k += len;
+  }
+  return cs;
+}
+inline constexpr std::string_view kBar = "\xe2\x94\x82";  // U+2502 box vertical
 
 AnalysisSnapshot loaded_snapshot() {
   AnalysisSnapshot s;
@@ -159,7 +201,7 @@ STELLAR_TEST(Tui, MainScreenShowsTheBannerWhenItFits) {
   const std::string cramped = app.render_frame_for_test(100, 14, snap, ScreenId::kMain);
   EXPECT_FALSE(contains(cramped, std::string(stellar::tui::kLogoLines[0])));
   for (const std::string& line : lines_of(cramped)) {
-    EXPECT_TRUE(stellar::tui::display_width(line) <= std::size_t(100));
+    EXPECT_TRUE(stellar::tui::display_width(line) <= writable_cols(100));
   }
 }
 
@@ -227,7 +269,7 @@ STELLAR_TEST(Tui, LayoutSurvivesHostileTerminalSizes) {
       // A rendered row must never be wider than the terminal, or the frame
       // wraps and leaves fragments behind.
       for (const std::string& line : lines_of(frame)) {
-        EXPECT_TRUE(stellar::tui::display_width(line) <= std::size_t(size[0]));
+        EXPECT_TRUE(stellar::tui::display_width(line) <= writable_cols(size[0]));
       }
     }
   }
@@ -322,6 +364,218 @@ STELLAR_TEST(Tui, AnalysisScreenShowsLiveProgress) {
   EXPECT_TRUE(contains(frame, "00:14"));
 }
 
+STELLAR_TEST(Tui, FooterMatchesThePanelAndKeepsTheWayOut) {
+  // The footer is per panel. With the input field focused every printable key is
+  // text -- a path is full of 'r', 'q' and 's' -- so Q/R/S are not shortcuts
+  // there and a footer that advertised them would be lying. Tab hands the
+  // keyboard to the menu, and then they are real.
+  //
+  // Whatever the panel, the last hint is the way out, and it survives a narrow
+  // terminal: hints are dropped from the middle, never the last one. A footer
+  // that cannot tell you how to leave is the one that strands a user.
+  App app(Theme::for_depth(ColorDepth::kNone));
+  const AnalysisSnapshot snap = loaded_snapshot();
+
+  // Input panel (the default): the honest set for that panel.
+  const auto input_rows =
+      lines_of(app.render_frame_for_test(80, 24, snap, ScreenId::kMain));
+  const std::string& input_footer = input_rows[input_rows.size() - 2];
+  EXPECT_TRUE(contains(input_footer, "Run"));
+  EXPECT_TRUE(contains(input_footer, "Menu"));
+  EXPECT_TRUE(contains(input_footer, "Quit"));
+  EXPECT_FALSE(contains(input_footer, "Settings"));
+
+  // Menu panel: every shortcut the main screen has, and all of them fit at the
+  // 80 columns the spec draws the footer at.
+  app.handle_key_for_test(stellar::tui::Event{stellar::tui::Key::kTab, {}});
+  const auto menu_rows =
+      lines_of(app.render_frame_for_test(80, 24, snap, ScreenId::kMain));
+  const std::string& menu_footer = menu_rows[menu_rows.size() - 2];
+  for (const char* word : {"Navigate", "Select", "Switch Panel", "Run",
+                           "Settings", "Quit"}) {
+    EXPECT_TRUE(contains(menu_footer, word));
+  }
+  EXPECT_TRUE(stellar::tui::display_width(menu_footer) <= writable_cols(80));
+
+  // Narrow: hints go, the way out stays.
+  const auto narrow_rows =
+      lines_of(app.render_frame_for_test(App::kMinCols, App::kMinRows, snap,
+                                         ScreenId::kMain));
+  const std::string& narrow_footer = narrow_rows[narrow_rows.size() - 2];
+  EXPECT_TRUE(contains(narrow_footer, "Quit"));
+  EXPECT_TRUE(stellar::tui::display_width(narrow_footer) <=
+              writable_cols(App::kMinCols));
+}
+
+STELLAR_TEST(Tui, EveryScreenIsReachableFromTheMainScreen) {
+  // A screen nobody can navigate to is dead code, and the settings screen was
+  // exactly that: fully painted, with hints and a key handler, and no key
+  // anywhere that opened it. This walks the navigation the hints promise.
+  App app(Theme::for_depth(ColorDepth::kNone));
+  EXPECT_TRUE(app.screen() == ScreenId::kMain);
+
+  // Tab moves focus from the input field to the action menu, then S opens
+  // settings, and Esc comes back.
+  app.handle_key_for_test(stellar::tui::Event{stellar::tui::Key::kTab, {}});
+  app.handle_key_for_test(stellar::tui::Event{stellar::tui::Key::kChar, "s"});
+  EXPECT_TRUE(app.screen() == ScreenId::kSettings);
+  app.handle_key_for_test(stellar::tui::Event{stellar::tui::Key::kEscape, {}});
+  EXPECT_TRUE(app.screen() == ScreenId::kMain);
+
+  // Enter on the first menu item opens the info view, Esc returns.
+  app.handle_key_for_test(stellar::tui::Event{stellar::tui::Key::kEnter, {}});
+  EXPECT_TRUE(app.screen() == ScreenId::kInfo);
+  app.handle_key_for_test(stellar::tui::Event{stellar::tui::Key::kEscape, {}});
+  EXPECT_TRUE(app.screen() == ScreenId::kMain);
+}
+
+STELLAR_TEST(Tui, SettingsShortcutDoesNotStealTypingFromTheInputField) {
+  // The input field keeps the keyboard by default and every path contains an
+  // 's', so the settings shortcut must not fire while the field owns focus.
+  App app(Theme::for_depth(ColorDepth::kNone));
+  app.handle_key_for_test(stellar::tui::Event{stellar::tui::Key::kChar, "/storage/emulated/0/lib.so"});
+  EXPECT_TRUE(app.screen() == ScreenId::kMain);
+}
+
+STELLAR_TEST(Tui, LayoutNeverEscapesItsContainer) {
+  // The regression guard for the whole class of bug this file exists to catch:
+  // content that overflows the box it lives in. Every screen is rendered at
+  // every awkward size and four properties are asserted:
+  //
+  //   1. the frame has exactly as many rows as the terminal, so nothing scrolls;
+  //   2. no row is wider than the last writable column, so nothing can wrap;
+  //   3. the terminal's final column is never written, so no row can arm the
+  //      pending-wrap flag that shifts the whole frame on some emulators;
+  //   4. at and above the minimum size the box is intact -- corners present and
+  //      both borders unbroken on every content row -- and below it the screen
+  //      degrades to the "too small" notice rather than a squashed frame.
+  //
+  // The sizes straddle App::kMinCols/kMinRows deliberately: that boundary is
+  // where the two regimes meet, and it is exactly where an off-by-one would
+  // show up.
+  constexpr int kWidths[] = {1,  2,  3,  8,  16, 20, 24, 28, 29, 30, 31,
+                             34, 40, 46, 56, 60, 72, 80, 100, 120, 160, 200};
+  constexpr int kHeights[] = {1, 2, 3, 5, 6, 8, 9, 10, 11, 14, 20, 24, 30, 45, 60};
+  App app(Theme::for_depth(ColorDepth::kNone));
+  const AnalysisSnapshot snap = loaded_snapshot();
+  for (const int w : kWidths) {
+    for (const int h : kHeights) {
+      for (const ScreenId id : kAllScreens) {
+        const std::string frame = app.render_frame_for_test(w, h, snap, id);
+        const auto rows = lines_of(frame);
+        EXPECT_TRUE(rows.size() == static_cast<std::size_t>(h));
+        for (const std::string& row : rows) {
+          EXPECT_TRUE(stellar::tui::display_width(row) <= writable_cols(w));
+        }
+        if (w < App::kMinCols || h < App::kMinRows) {
+          // No frame at all below the threshold -- a squashed box is worse than
+          // an honest notice -- but the screen must still say something.
+          EXPECT_TRUE(contains(frame, "small") || contains(frame, "Small") ||
+                      contains(frame, "!"));
+          continue;
+        }
+        const auto top = cells_of(rows[0]);
+        EXPECT_TRUE(!top.empty() && top.front() == "\u250c");
+        const auto bottom = cells_of(rows[static_cast<std::size_t>(h) - 1]);
+        EXPECT_TRUE(!bottom.empty() && bottom.front() == "\u2514");
+        // Rows 1..h-4 are content; h-3 is the separator, h-2 the footer.
+        for (std::size_t r = 1; r + 3 < rows.size(); ++r) {
+          const auto cs = cells_of(rows[r]);
+          if (cs.empty()) continue;
+          EXPECT_EQ(cs.front(), std::string(kBar));
+          EXPECT_EQ(cs[cs.size() - 1], std::string(kBar));
+        }
+      }
+    }
+  }
+}
+
+STELLAR_TEST(Tui, LongPathsStayInsideTheirField) {
+  // A path longer than the field must scroll inside it, never spill over the
+  // frame. The input field is the one widget that routinely holds a string far
+  // wider than the terminal.
+  App app(Theme::for_depth(ColorDepth::kNone));
+  AnalysisSnapshot snap = loaded_snapshot();
+  const char* kLong =
+      "/storage/emulated/0/#Vekendian/very/deeply/nested/project/tree/"
+      "libcocos2dcpp_1.74.2.so";
+  for (const int w : {30, 40, 60, 90}) {
+    app.set_input_path_for_test(kLong);
+    for (const ScreenId id : {ScreenId::kMain, ScreenId::kEmit}) {
+      const std::string frame = app.render_frame_for_test(w, 24, snap, id);
+      for (const std::string& row : lines_of(frame)) {
+        EXPECT_TRUE(stellar::tui::display_width(row) <= writable_cols(w));
+      }
+      for (std::size_t r = 1; r + 3 < lines_of(frame).size(); ++r) {
+        const auto cs = cells_of(lines_of(frame)[r]);
+        if (cs.empty()) continue;
+        EXPECT_EQ(cs.front(), std::string(kBar));
+        EXPECT_EQ(cs[cs.size() - 1], std::string(kBar));
+      }
+    }
+  }
+}
+
+STELLAR_TEST(Tui, ButtonsShareOneColumn) {
+  // The complete screen's buttons are a group and must line up. Centring each
+  // label on its own width -- the original bug -- puts them in a staircase.
+  App app(Theme::for_depth(ColorDepth::kNone));
+  AnalysisSnapshot snap = loaded_snapshot();
+  snap.phase = AnalysisSnapshot::Phase::kDone;
+  snap.out_path = "output/dump.cs";
+  const std::string frame = app.render_frame_for_test(80, 24, snap, ScreenId::kComplete);
+  const auto rows = lines_of(frame);
+  std::size_t first = std::string::npos, second = std::string::npos;
+  for (std::size_t r = 0; r < rows.size(); ++r) {
+    const std::size_t at = rows[r].find('[');
+    if (at == std::string::npos) continue;
+    if (first == std::string::npos) {
+      first = at;
+    } else if (second == std::string::npos) {
+      second = at;
+      break;
+    }
+  }
+  EXPECT_TRUE(first != std::string::npos && second != std::string::npos);
+  EXPECT_EQ(first, second);
+}
+
+STELLAR_TEST(Tui, AnsiTerminalsGetTheSameLayoutWithEraseSequences) {
+  // The interactive path differs from the no-colour path in two ways: every row
+  // is placed with an absolute cursor move, and it ends with an
+  // erase-to-end-of-line. Neither may disturb the layout, and this is the path a
+  // real user on a real terminal actually sees -- so the container invariants
+  // are asserted again with escape output switched on.
+  Theme t = Theme::for_depth(ColorDepth::kAnsi256);
+  t.set_ansi_enabled(true);
+  App app(t);
+  const AnalysisSnapshot snap = loaded_snapshot();
+  for (const int w : {30, 34, 44, 56, 72, 100, 200}) {
+    for (const ScreenId id : kAllScreens) {
+      const std::string frame = app.render_frame_for_test(w, 24, snap, id);
+      // Absolute positioning, and the erase that clears the column the row
+      // deliberately does not write.
+      EXPECT_TRUE(contains(frame, "\033[1;1H"));
+      EXPECT_TRUE(contains(frame, "\033[24;1H"));
+      EXPECT_TRUE(contains(frame, "\033[K"));
+      const auto rows = lines_of(frame);
+      EXPECT_TRUE(rows.size() == std::size_t(24));
+      for (const std::string& row : rows) {
+        // lines_of strips escapes, so this is the visible width.
+        EXPECT_TRUE(stellar::tui::display_width(row) <= writable_cols(w));
+      }
+      const auto top = cells_of(rows[0]);
+      EXPECT_TRUE(!top.empty() && top.front() == "\u250c");
+      for (std::size_t r = 1; r + 3 < rows.size(); ++r) {
+        const auto cs = cells_of(rows[r]);
+        if (cs.empty()) continue;
+        EXPECT_EQ(cs.front(), std::string(kBar));
+        EXPECT_EQ(cs[cs.size() - 1], std::string(kBar));
+      }
+    }
+  }
+}
+
 STELLAR_TEST(Tui, ScreenDiffOnlyRedrawsChangedRows) {
   Screen a;
   a.resize(20, 5);
@@ -349,7 +603,7 @@ STELLAR_TEST(Tui, ScreenWritesOutsideItsGridAreIgnored) {
   EXPECT_EQ(s.cols(), 10);
   const std::string frame = s.render(Theme::for_depth(ColorDepth::kNone));
   for (const std::string& line : lines_of(frame)) {
-    EXPECT_TRUE(stellar::tui::display_width(line) <= std::size_t(10));
+    EXPECT_TRUE(stellar::tui::display_width(line) <= writable_cols(10));
   }
 }
 

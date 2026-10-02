@@ -30,6 +30,7 @@
 #include <exception>
 #include <initializer_list>
 #include <string>
+#include <vector>
 #include <string_view>
 #include <utility>
 
@@ -125,15 +126,37 @@ struct Hint {
 void draw_hints(Screen& s, int row, int col, int width,
                 std::initializer_list<Hint> hints) {
   if (width <= 0) return;
+  std::vector<Hint> list(hints);
+  auto need_for = [&](const std::vector<Hint>& v, int gap) {
+    int need = 0;
+    for (std::size_t i = 0; i < v.size(); ++i) {
+      if (i != 0) need += gap;
+      need += static_cast<int>(display_width(v[i].key) + display_width(v[i].desc));
+    }
+    return need;
+  };
+  // Prefer the roomy separator, but close the gaps up before dropping a hint.
+  // Losing "Q Quit" from the footer just to advertise one more key is worse than
+  // tightening the spacing, and the spec draws the whole set at 80 columns --
+  // which is exactly the width where one extra hint stops fitting.
+  //
+  // When even tight spacing is not enough, hints are dropped from the *middle*
+  // working back from the end, never the last one: by convention the last hint
+  // is the way out (Quit / Back), and a footer that cannot tell you how to leave
+  // is the one that strands a user on a small terminal.
+  while (list.size() > 2 && need_for(list, 1) > width) {
+    list.erase(list.end() - 2);
+  }
+  const int gap = need_for(list, 2) <= width ? 2 : 1;
   int x = col;
   bool first = true;
-  for (const Hint& h : hints) {
+  for (const Hint& h : list) {
     const int kw = static_cast<int>(display_width(h.key));
     const int dw = static_cast<int>(display_width(h.desc));
     if (!first) {
-      if (x + 2 > col + width) return;
-      s.put(row, x, "  ");
-      x += 2;
+      if (x + gap > col + width) return;
+      s.put(row, x, gap == 2 ? "  " : " ");
+      x += gap;
     }
     if (x + kw + dw > col + width) return;
     s.put(row, x, h.key, Style::kKey);
@@ -177,8 +200,16 @@ class Pen {
   /// On a narrow frame the two columns cannot both survive, so the pair
   /// collapses to one "label: value" line rather than being clipped into
   /// nonsense. `label_w` is the value column's offset from the indent.
+  /// The label column is not a fixed constant: it is derived from the width
+  /// actually available, so on a phone-sized terminal the value -- which carries
+  /// the information -- keeps its room instead of being cut off after
+  /// "20,454,". A clipped label is a cosmetic loss; a clipped count is a false
+  /// statement about a number.
+  ///
+  /// `label_w` overrides the derivation for a caller that places its own value
+  /// column (the settings screen does, because it edits values in place).
   void field(std::string_view label, std::string_view value,
-             Style vs = Style::kValue, int label_w = 18) {
+             Style vs = Style::kValue, int label_w = 0) {
     if (full()) return;
     const int indent = 2;
     const int avail = width_ - indent;
@@ -186,7 +217,28 @@ class Pen {
       ++row_;
       return;
     }
-    if (avail < label_w + 6) {
+    // Always leave a gap: a label clipped flush against its value reads as one
+    // run-together word ("Compilati1,183"), which is worse than either column
+    // giving up a character.
+    constexpr int kGap = 2;
+    constexpr int kLabelMax = 19;  // fits the longest label, incl. the gap
+    const int value_w = static_cast<int>(display_width(value));
+    int col = label_w;
+    if (col <= 0) {
+      // Start at the width the labels are authored to and only give ground when
+      // this row's value actually needs it. Sizing the column to a fraction of
+      // the row instead would clip every label on a narrow terminal -- turning
+      // "Compilation Units" into "Compila" -- to buy space the value did not
+      // ask for.
+      col = kLabelMax;
+      if (col > avail - (value_w + kGap)) col = avail - (value_w + kGap);
+      col = std::clamp(col, 8, kLabelMax);
+    }
+    const int label_room = std::max(1, col - kGap);
+    const bool fits = avail >= col + 6 && value_w <= avail - col;
+    if (!fits) {
+      // Too narrow for two columns, or the value would not survive the squeeze:
+      // collapse to a single "label: value" line rather than clipping a number.
       std::string one(label);
       one += ": ";
       one += value;
@@ -194,8 +246,8 @@ class Pen {
       ++row_;
       return;
     }
-    s_.text_clipped(row_, left_ + indent, label_w, label, Style::kLabel);
-    s_.text_clipped(row_, left_ + indent + label_w, avail - label_w, value, vs);
+    s_.text_clipped(row_, left_ + indent, label_room, label, Style::kLabel);
+    s_.text_clipped(row_, left_ + indent + col, avail - col, value, vs);
     ++row_;
   }
 
@@ -295,17 +347,27 @@ constexpr std::string_view kNotApplied = " (not applied)";
 /// Four rows are spent on this. That is the floor the layout assumes, so the
 /// 6-row minimum size still has two content rows rather than a negative
 /// height.
+/// The box is deliberately `cols-1` wide and leaves the terminal's final column
+/// untouched. Writing a character into the last column of a row arms the
+/// pending-wrap flag, and on several emulators -- Android's included -- that
+/// flag survives the carriage return that follows, so every subsequent line
+/// shifts sideways and the frame visibly falls apart. The symptoms are a right
+/// border that appears in fragments and content that looks as though it escaped
+/// the box. Not writing the last cell removes the hazard; Screen::render_row
+/// enforces the same rule, and the erase-to-end-of-line that follows each row
+/// clears whatever previous frames left in the column we skip.
 void draw_frame(Screen& s, int cols, int rows, std::string_view title,
                 std::string_view right, std::initializer_list<Hint> hints) {
-  s.box(0, 0, cols, rows, Style::kBorder, title, Style::kTitle);
-  if (cols > 2 && rows > 3) {
+  const int frame_w = std::max(1, cols - 1);
+  s.box(0, 0, frame_w, rows, Style::kBorder, title, Style::kTitle);
+  if (frame_w > 2 && rows > 3) {
     // Subtitle, right-aligned one column inside the right border, and only
     // when it cannot collide with the title.
     const int w = static_cast<int>(display_width(right));
-    const int at = cols - 2 - w;
+    const int at = frame_w - 2 - w;
     const int title_end = 2 + static_cast<int>(display_width(title));
     if (!right.empty() && at > title_end + 1) s.put(0, at, right, Style::kMuted);
-    const int inner = cols - 2;
+    const int inner = frame_w - 2;
     s.hline(rows - 3, 1, inner, Style::kBorder);
     draw_hints(s, rows - 2, 1, inner, hints);
   }
@@ -314,7 +376,12 @@ void draw_frame(Screen& s, int cols, int rows, std::string_view title,
 /// Footer hints, per screen, exactly as the spec spells them.
 constexpr std::initializer_list<Hint> kMainHints{
     {"↑↓", " Navigate"},   {"Enter", " Select"}, {"Tab", " Switch Panel"},
-    {"R", " Run"},        {"Esc", " Back"},     {"Q", " Quit"}};
+    {"R", " Run"},        {"S", " Settings"},   {"Q", " Quit"}};
+/// With the input field focused every printable key is text, so Q/R/S are not
+/// shortcuts there and advertising them would be a lie. Enter and Tab are the
+/// only ways out of the field, and Ctrl-C always quits.
+constexpr std::initializer_list<Hint> kMainInputHints{
+    {"Enter", " Run"}, {"Tab", " Menu"}, {"^C", " Quit"}};
 constexpr std::initializer_list<Hint> kEmitHints{
     {"↑↓", " Navigate"}, {"Space", " Toggle"}, {"Enter", " Edit"},
     {"Esc", " Back"},    {"R", " Run"}};
@@ -342,7 +409,10 @@ App::~App() {
 App::Region App::content_region(int cols, int rows) noexcept {
   Region r;
   r.left = 1;
-  r.width = cols - 2;
+  // The frame is one column narrower than the terminal (see draw_frame), so the
+  // interior is cols-3 wide: one column for each border, plus the final column
+  // that is deliberately never written.
+  r.width = cols - 3;
   if (r.width < 1) r.width = 1;
   r.top = 1;
   r.bottom = rows - 3;  // the separator row
@@ -354,6 +424,12 @@ App::Region App::content_region(int cols, int rows) noexcept {
 
 void App::paint(Screen& s) const {
   s.clear();
+  // One size decision, made once, before any screen paints. Every screen below
+  // may then assume it has at least kMinCols x kMinRows to work with.
+  if (s.cols() < kMinCols || s.rows() < kMinRows) {
+    paint_too_small(s);
+    return;
+  }
   const Region r = content_region(s.cols(), s.rows());
   switch (screen_) {
     case ScreenId::kMain: paint_main(s, r); break;
@@ -362,6 +438,40 @@ void App::paint(Screen& s) const {
     case ScreenId::kComplete: paint_complete(s, r); break;
     case ScreenId::kSettings: paint_settings(s, r); break;
     case ScreenId::kInfo: paint_info(s, r); break;
+  }
+}
+
+void App::paint_too_small(Screen& s) const {
+  // Wording tiers, longest first; the first one that fits the width wins. The
+  // final column is never written (see draw_frame), so the usable width is
+  // cols-1.
+  const int avail = std::max(1, s.cols() - 1);
+  const std::string have = std::to_string(s.cols()) + "x" + std::to_string(s.rows());
+  const std::string need = std::to_string(kMinCols) + "x" + std::to_string(kMinRows);
+  const std::string_view titles[] = {"Terminal too small", "Too small", "Small", "!"};
+  const std::string details[] = {"need " + need + ", have " + have,
+                                 need + " / " + have, have};
+  std::string title = "!";
+  for (std::string_view t : titles) {
+    if (static_cast<int>(display_width(t)) <= avail) {
+      title = std::string(t);
+      break;
+    }
+  }
+  std::vector<std::string> lines{title};
+  for (const std::string& d : details) {
+    if (static_cast<int>(display_width(d)) <= avail) {
+      lines.push_back(d);
+      break;
+    }
+  }
+  if (static_cast<int>(lines.size()) > s.rows()) lines.resize(static_cast<std::size_t>(s.rows()));
+  const int top = std::max(0, (s.rows() - static_cast<int>(lines.size())) / 2);
+  for (std::size_t i = 0; i < lines.size(); ++i) {
+    const int w = static_cast<int>(display_width(lines[i]));
+    const int x = std::max(0, (avail - w) / 2);
+    s.text_clipped(top + static_cast<int>(i), x, avail - x, lines[i],
+                   i == 0 ? Style::kWarning : Style::kMuted);
   }
 }
 
@@ -454,9 +564,6 @@ void App::draw_field(Screen& s, int row, int col, int width, const Field& f,
 /// cannot do without. A 24-row terminal keeps everything but the banner, which
 /// needs 57 columns and six rows it does not have next to the rest.
 void App::paint_main(Screen& s, const Region& r) const {
-  draw_frame(s, s.cols(), s.rows(), "STELLAR", "Native ELF / DWARF Analysis",
-             kMainHints);
-
   constexpr int kInputRows = 4;  // section + a three-row framed field
   constexpr int kMenuRows = 5;   // section + four actions
   constexpr int kFileRows = 6;   // section + five facts
@@ -471,6 +578,13 @@ void App::paint_main(Screen& s, const Region& r) const {
                          kInputRows + kFileRows + kMenuRows + kOutRows;
   const int used = kInputRows + kMenuRows + (show_file ? kFileRows + kOutRows : 0) +
                    (show_logo ? logo_rows : 0);
+  // The banner already spells the name, so the border title would only repeat
+  // it. When the banner does not fit (small terminal) the title comes back,
+  // because then nothing else on screen says what this is.
+  draw_frame(s, s.cols(), s.rows(), show_logo ? std::string_view{} : "STELLAR",
+             "Native ELF / DWARF Analysis",
+             main_panel_ == 0 ? kMainInputHints : kMainHints);
+
   // Spare rows become breathing room between the blocks, capped at two so a
   // tall terminal does not turn into a column of white.
   const int gap = show_file ? std::clamp((h - used) / 4, 0, 2) : 0;
@@ -479,7 +593,15 @@ void App::paint_main(Screen& s, const Region& r) const {
   const FileFacts& f = snap_.file;
 
   if (show_logo) {
-    draw_logo(s, pen.row(), r.left);
+    // Centred on the interior, by the banner's real display width (measured, not
+    // assumed): the widest row decides, so the art keeps its shape and only
+    // moves as a whole. Floor division puts any odd spare column on the right.
+    int art_w = 0;
+    for (const std::string_view row : kLogoLines) {
+      art_w = std::max(art_w, static_cast<int>(display_width(row)));
+    }
+    const int x = r.left + std::max(0, (r.width - art_w) / 2);
+    draw_logo(s, pen.row(), x);
     pen.blank(logo_rows);
   }
   if (gap) pen.blank(gap);
@@ -753,11 +875,20 @@ void App::paint_complete(Screen& s, const Region& r) const {
 
   static constexpr std::string_view kButtons[] = {"[ OPEN OUTPUT ]",
                                                  "[ BACK TO MAIN ]", "[ QUIT ]"};
-  for (int i = 0; i < 3; ++i) {
+  // Centre the group by its widest member rather than each label on its own.
+  // Centring them individually puts labels of different widths on different
+  // columns, which reads as a staircase; the spec draws all three starting at
+  // one column with the block as a whole centred.
+  int widest = 0;
+  for (const std::string_view b : kButtons) {
+    widest = std::max(widest, static_cast<int>(display_width(b)));
+  }
+  const int start = r.left + std::max(0, (r.width - widest) / 2);
+  const int room = r.left + r.width - start;
+  for (int i = 0; i < 3 && room > 0; ++i) {
     const int row = pin ? r.bottom - 3 + i : pen.row();
     if (row >= r.bottom) break;
-    const int w = static_cast<int>(display_width(kButtons[i]));
-    s.text_clipped(row, r.left + std::max(0, (r.width - w) / 2), r.width, kButtons[i],
+    s.text_clipped(row, start, room, kButtons[i],
                    complete_item_ == i ? Style::kButtonSelected : Style::kButton);
   }
 }
@@ -776,10 +907,18 @@ void App::paint_settings(Screen& s, const Region& r) const {
   draw_frame(s, s.cols(), s.rows(), "STELLAR / SETTINGS", {}, kSettingsHints);
   Pen pen(s, r.top, r.bottom, r.left, r.width);
   const int indent = 2;
-  const int label_w = 18;
+  // Derived from the row that is actually available, not a fixed 18: on a
+  // phone-width terminal an 18-column label squeezes the value into a sliver
+  // ("[ AUTO " instead of "[ AUTO ]"). The column is the width the labels are
+  // authored to, given up only as far as the value column genuinely needs --
+  // these values are edited in place, so the field has to stay usable.
+  constexpr int kValueNeed = 12;  // "[ 8192 MB ]" plus a little
+  constexpr int kLabelMax = 19;
+  const int avail = r.width - indent;
+  const int label_w = std::clamp(avail - kValueNeed - 2, 8, kLabelMax);
   const int value_x = r.left + indent + label_w;
   const int value_room = r.left + r.width - value_x;
-  const bool two_column = r.width - indent >= label_w + 6;
+  const bool two_column = avail >= label_w + 8;
 
   /// One "Label   [ value ]" row, with the value in its own style and an
   /// optional muted suffix hanging off the end of it.
@@ -1037,13 +1176,22 @@ void App::handle_key(const Event& e) {
 }
 
 void App::handle_main_key(const Event& e) {
-  if (e.key == Key::kChar) {
+  // Single-letter shortcuts (Q quit, R run, S settings) belong to the *menu*
+  // panel only. In the input field every printable key is text: a path is full
+  // of 'r', 'q' and 's' ("/storage/emulated/0/..."), and a shortcut that steals
+  // them makes the field impossible to type into. Enter runs from either panel,
+  // Tab/Esc moves focus to the menu, and Ctrl-C quits from anywhere.
+  if (e.key == Key::kChar && main_panel_ == 1) {
     if (e.text == "q" || e.text == "Q") {
       quit_ = true;
       return;
     }
     if (e.text == "r" || e.text == "R") {
       run_main_action(main_item_);
+      return;
+    }
+    if (e.text == "s" || e.text == "S") {
+      set_screen(ScreenId::kSettings);
       return;
     }
   }
@@ -1063,7 +1211,10 @@ void App::handle_main_key(const Event& e) {
       run_main_action(main_item_);
       return;
     case Key::kEscape:
-      return;  // the first screen has nothing behind it
+      // Nothing is behind the first screen, so Esc is free to mean "leave the
+      // text field": it is the way to reach the menu shortcuts without Tab.
+      main_panel_ = 1;
+      return;
     default:
       break;
   }

@@ -39,6 +39,13 @@ class App {
   /// redesigning how the user moves around.
   enum class ScreenId { kMain, kEmit, kAnalysis, kComplete, kSettings, kInfo };
 
+  /// The smallest terminal the screens are laid out for. Anything smaller gets
+  /// the single "terminal too small" notice instead of a squashed, wrapped
+  /// frame. The threshold lives here, in one place, so it cannot drift between
+  /// the painter and the tests.
+  static constexpr int kMinCols = 30;
+  static constexpr int kMinRows = 10;
+
   App();
   /// Test seam: takes the theme from the caller instead of probing a terminal,
   /// so the whole render path can be exercised with no tty and no escape
@@ -71,6 +78,9 @@ class App {
   void set_input_path_for_test(std::string path);
   /// Sets the emit toggles (methods / padding / unit information).
   void set_emit_options_for_test(bool methods, bool pad_layout, bool build_units);
+  /// Feeds one decoded key through the same handler the event loop calls, so
+  /// navigation can be proven without a terminal.
+  void handle_key_for_test(const Event& e) { handle_key(e); }
 
  private:
 
@@ -138,6 +148,9 @@ class App {
   void paint_complete(Screen& s, const Region& r) const;
   void paint_settings(Screen& s, const Region& r) const;
   void paint_info(Screen& s, const Region& r) const;
+  /// Fallback for terminals below kMinCols x kMinRows. Draws no frame, and
+  /// degrades to shorter wording rather than ever overflowing the grid.
+  void paint_too_small(Screen& s) const;
 
   /// The canonical banner, as two-tone cells.
   void draw_logo(Screen& s, int row, int col) const;

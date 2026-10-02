@@ -87,8 +87,9 @@ class Terminal {
   [[nodiscard]] bool active() const noexcept;
   [[nodiscard]] bool ansi() const noexcept { return ansi_; }
 
-  /// Terminal size in columns/rows, re-read from the OS. Falls back to 80x24
-  /// when the terminal cannot report one (a bare pty, some CI runners).
+  /// Terminal size in columns/rows, re-read from the OS, never below 1x1. Falls
+  /// back to 80x24 when the terminal cannot report one (a bare pty, some CI
+  /// runners). Not clamped: the layout decides what is too small.
   void refresh_size() noexcept;
   [[nodiscard]] int width() const noexcept { return width_; }
   [[nodiscard]] int height() const noexcept { return height_; }
@@ -115,6 +116,10 @@ class Terminal {
   static void install_signal_handlers();
   /// The exact sequence written by the signal handler.
   static std::string_view restore_sequence();
+
+  /// Makes SIGWINCH interrupt the input wait, so a resize is repainted at once
+  /// instead of on the next redraw tick.
+  static void install_resize_handler();
 
   /// Pushes a pending terminal-restore onto the process exit path. Belt and
   /// braces: the destructor and the signal handler normally both fire.

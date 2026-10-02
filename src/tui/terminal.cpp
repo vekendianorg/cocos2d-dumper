@@ -55,6 +55,11 @@ constexpr std::string_view kRestore =
     "\033[?1l"         // normal keypad mode, for terminals that switch it
     "\033[?7h";        // re-enable line wrapping, which raw mode disables
 
+extern "C" void winch_signal_handler(int) {
+  // Intentionally empty: delivery alone interrupts poll() with EINTR, and the
+  // event loop re-reads the size on every iteration.
+}
+
 extern "C" void restore_signal_handler(int sig) {
   // write(2) is async-signal-safe. Everything else here would not be.
   if (g_restore_needed.load(std::memory_order_relaxed)) {
@@ -97,6 +102,16 @@ void Terminal::install_signal_handlers() {
     sa.sa_flags = SA_RESTART;
     ::sigaction(sig, &sa, nullptr);
   }
+#endif
+}
+
+void Terminal::install_resize_handler() {
+#if !defined(_WIN32)
+  struct sigaction sa {};
+  sa.sa_handler = winch_signal_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;  // no SA_RESTART: poll() must return early on a resize
+  ::sigaction(SIGWINCH, &sa, nullptr);
 #endif
 }
 
@@ -151,6 +166,7 @@ bool Terminal::active() const noexcept {
 
 bool Terminal::enter(bool allow_ansi) {
   install_signal_handlers();
+  install_resize_handler();
   install_atexit();
   refresh_size();
   last_width_ = width_;
@@ -246,10 +262,12 @@ void Terminal::refresh_size() noexcept {
     if (ws.ws_row > 0) height_ = ws.ws_row;
   }
 #endif
-  // A terminal narrower than the layout minimum is clamped so the box-drawing
-  // maths never goes negative.
-  if (width_ < 20) width_ = 20;
-  if (height_ < 6) height_ = 6;
+  // The real size is reported as-is (never below 1x1). Clamping here used to
+  // make the app lay out a 20x6 frame inside a smaller terminal, which wraps
+  // every row and tears the frame apart. The layout owns the "too small"
+  // decision instead (App::paint), so it is made in exactly one place.
+  if (width_ < 1) width_ = 1;
+  if (height_ < 1) height_ = 1;
 }
 
 bool Terminal::size_changed() {
@@ -358,21 +376,36 @@ bool Terminal::poll(Event& out, int timeout_ms) {
     Sleep(5);
   }
 #else
-  struct pollfd pfd {};
-  pfd.fd = STDIN_FILENO;
-  pfd.events = POLLIN;
-  const int rc = ::poll(&pfd, 1, timeout_ms);
-  if (rc <= 0) return false;  // timeout, or an error we treat as "nothing yet"
-  char buf[256];
-  const ssize_t n = ::read(STDIN_FILENO, buf, sizeof(buf));
-  if (n <= 0) {
-    if (n < 0 && errno == EINTR) return false;  // a signal, not EOF
-    return false;
+  // Bytes left over from the previous read are served first, without waiting:
+  // a burst ("ab\r", a paste, a fast typist, an Android keyboard committing a
+  // word) arrives as ONE read but is several keys, and decoding only the first
+  // would silently drop or delay the rest.
+  {
+    const bool leftover = !impl_->pending.empty();
+    struct pollfd pfd {};
+    pfd.fd = STDIN_FILENO;
+    pfd.events = POLLIN;
+    const int rc = ::poll(&pfd, 1, leftover ? 0 : timeout_ms);
+    if (rc > 0) {
+      char buf[4096];
+      const ssize_t n = ::read(STDIN_FILENO, buf, sizeof(buf));
+      if (n > 0) bytes.assign(buf, static_cast<std::size_t>(n));
+      else if (!leftover) return false;  // EINTR is a signal, not EOF
+    } else if (!leftover) {
+      return false;  // timeout, signal (SIGWINCH), or "nothing yet"
+    }
   }
-  bytes.assign(buf, static_cast<std::size_t>(n));
 #endif
 
+  // Everything unread (leftovers plus anything new) is decoded from one buffer,
+  // and whatever one event does not consume goes back for the next call.
+  impl_->pending.append(bytes);
+  bytes = std::move(impl_->pending);
+  impl_->pending.clear();
   if (bytes.empty()) return false;
+  const auto give_back = [&](std::size_t consumed) {
+    if (consumed < bytes.size()) impl_->pending = bytes.substr(consumed);
+  };
 
   // --- escape sequences -------------------------------------------------
   if (bytes[0] == '\033') {
@@ -402,12 +435,14 @@ bool Terminal::poll(Event& out, int timeout_ms) {
       if (i < bytes.size()) {
         csi_key(bytes[i], params, out);
         (void)intro;
+        give_back(i + 1);
         if (out.key != Key::kNone) return true;
       }
       return false;
     }
     // ESC followed by a printable byte: treat as Alt+key, which the TUI does
     // not bind, so consume both and report nothing.
+    give_back(2);
     return false;
   }
 
@@ -416,36 +451,65 @@ bool Terminal::poll(Event& out, int timeout_ms) {
     case '\r':
     case '\n':
       out.key = Key::kEnter;
+      give_back(1);
       return true;
     case '\t':
       out.key = Key::kTab;
+      give_back(1);
       return true;
     case 0x7F:
     case 0x08:
       out.key = Key::kBackspace;
+      give_back(1);
       return true;
     // Ctrl-C: raw mode has ISIG off, so this arrives as a key rather than a
     // signal, and the TUI handles it like any other quit request.
     case 0x03:
       out.key = Key::kChar;
       out.text = "\x03";
+      give_back(1);
       return true;
     default:
       break;
   }
 
   // --- UTF-8 text --------------------------------------------------------
-  // Accumulate so a multi-byte codepoint split across two reads still decodes.
-  impl_->pending.append(bytes);
-  const auto b0 = static_cast<unsigned char>(impl_->pending[0]);
-  std::size_t need = 1;
-  if ((b0 & 0xE0) == 0xC0) need = 2;
-  else if ((b0 & 0xF0) == 0xE0) need = 3;
-  else if ((b0 & 0xF8) == 0xF0) need = 4;
-  if (impl_->pending.size() < need) return false;
+  // The longest run of printable characters is delivered as ONE event (Event
+  // documents that `text` may hold a pasted run). A run stops at the first
+  // control byte, which stays buffered for the next call, and at an incomplete
+  // trailing codepoint, which waits for its remaining bytes.
+  std::size_t end = 0;
+  while (end < bytes.size()) {
+    const auto b = static_cast<unsigned char>(bytes[end]);
+    if (b < 0x20 || b == 0x7F) break;
+    std::size_t need = 1;
+    if ((b & 0xE0) == 0xC0) need = 2;
+    else if ((b & 0xF0) == 0xE0) need = 3;
+    else if ((b & 0xF8) == 0xF0) need = 4;
+    if (end + need > bytes.size()) break;  // split codepoint: wait for the rest
+    end += need;
+  }
+  if (end == 0) {
+    // Either a split codepoint at the very start, or a control byte we do not
+    // bind. Keep the former, drop the latter.
+    const auto b = static_cast<unsigned char>(bytes[0]);
+    if (b < 0x20 || b == 0x7F) {
+      give_back(1);
+    } else {
+      impl_->pending = std::move(bytes);
+#if !defined(_WIN32)
+      // Wait for the rest of the codepoint instead of spinning on the leftover.
+      struct pollfd wait {};
+      wait.fd = STDIN_FILENO;
+      wait.events = POLLIN;
+      (void)::poll(&wait, 1, timeout_ms);
+#endif
+    }
+    return false;
+  }
   out.key = Key::kChar;
-  out.text = impl_->pending.substr(0, need);
-  impl_->pending.erase(0, need);
+  out.text = bytes.substr(0, end);
+  give_back(end);
   return true;
 }
 

@@ -292,14 +292,22 @@ std::string Screen::render_row(int row, const Theme& theme) const {
   bool painted = false;  // ...and it actually emitted bytes
   int used = 0;
 
-  for (int col = 0; col < cols_; ++col) {
+  // The terminal's final column is never written. Emitting a character there
+  // arms the pending-wrap flag, and if that flag survives the carriage return
+  // that follows -- which is what happens on some emulators, Android's
+  // included -- every subsequent line shifts sideways and the frame falls apart.
+  // Screen::render() and render_diff() both erase to end of line after the row,
+  // so nothing is ever left showing in the column we skip.
+  const int limit = cols_ > 1 ? cols_ - 1 : 1;
+
+  for (int col = 0; col < limit; ++col) {
     const ScreenCell* c = at(row, col);
     // An empty cell is a blank or the tail of a wide glyph: either way the
     // terminal has already moved past this column, so nothing is emitted.
     if (c == nullptr || c->text.empty()) continue;
     const int w = static_cast<int>(display_width(c->text));
     if (w <= 0) continue;
-    if (used + w > cols_) break;  // defensive: a row must never wrap
+    if (used + w > limit) break;  // defensive: a row must never wrap
     if (!styled || c->style != current) {
       const std::string_view esc = theme.paint(c->style);
       out.append(esc);
@@ -315,19 +323,41 @@ std::string Screen::render_row(int row, const Theme& theme) const {
   // background instead of extending a selection highlight to the right edge.
   if (painted) out.append(theme.reset());
   // Every row is padded to its full width: a blank row still has to overwrite
-  // whatever the terminal left there from the previous frame.
-  out.append(static_cast<std::size_t>(cols_ - used), ' ');
+  // whatever the terminal left there from the previous frame. The last column is
+  // left out of the count above, so pad only up to `limit` and let the caller's
+  // erase-to-end-of-line deal with the final cell.
+  if (used < limit) out.append(static_cast<std::size_t>(limit - used), ' ');
   return out;
 }
 
 std::string Screen::render(const Theme& theme) const {
   std::string out;
   out.reserve(static_cast<std::size_t>(rows_) *
-                  (static_cast<std::size_t>(cols_) * 2 + 8) +
+                  (static_cast<std::size_t>(cols_) * 2 + 16) +
               16);
+  // Every row is placed with an absolute cursor move (CUP row;1). Rows used to
+  // be chained with CR LF, which is *relative*: one row that wrapped, one glyph
+  // the terminal measures differently from display_width(), or one stray
+  // pending-wrap flag shifted every row after it, and the frame drifted a line
+  // at a time. With an absolute move per row an error stays inside its own row
+  // and can never accumulate, whatever the terminal size or font.
+  //
+  // Without ANSI there is no way to address a row, so the frame falls back to
+  // plain CR LF separated lines (and no escape byte is emitted at all).
   for (int row = 0; row < rows_; ++row) {
-    if (row != 0) out.append("\r\n");
+    if (theme.ansi_enabled()) {
+      out.append(ansi::cursor_to(row + 1, 1));
+    } else if (row != 0) {
+      out.append("\r\n");
+    }
     out.append(render_row(row, theme));
+    // render_row deliberately stops one column short of the right edge, so each
+    // row erases its own remainder; otherwise the final column would keep
+    // whatever a wider frame left there.
+    // Not on a one-column grid: there render_row *does* write the last cell,
+    // the cursor is left parked on it, and erase-to-end-of-line would wipe the
+    // very glyph just drawn.
+    if (theme.ansi_enabled() && cols_ > 1) out.append(kEraseToEndOfLine);
   }
   return out;
 }
@@ -337,14 +367,19 @@ std::string Screen::render_diff(const Theme& theme, const Screen& prev) const {
   // as changed. Rows that only exist in `prev` are the caller's problem: only a
   // full render() can clear territory this grid does not own.
   const bool resized = (prev.cols_ != cols_ || prev.rows_ != rows_);
+  // Without cursor addressing there is no such thing as updating a row in place,
+  // so a diff is meaningless; hand back a whole frame instead of a sequence that
+  // would reposition the cursor into random places.
+  if (!theme.ansi_enabled()) return render(theme);
   std::string out;
   for (int row = 0; row < rows_; ++row) {
     if (!resized && row_equal(row, prev)) continue;
     out.append(ansi::cursor_to(row + 1, 1));
     out.append(render_row(row, theme));
     // The row may now be shorter than it was, so clear the remainder rather
-    // than trusting the pad to cover it.
-    out.append(kEraseToEndOfLine);
+    // than trusting the pad to cover it. Skipped without escape support, for
+    // the same reason as in render().
+    if (theme.ansi_enabled() && cols_ > 1) out.append(kEraseToEndOfLine);
   }
   return out;
 }

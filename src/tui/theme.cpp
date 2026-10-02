@@ -226,13 +226,33 @@ Theme Theme::for_depth(ColorDepth depth) noexcept {
   return t;
 }
 
+/// Whether the terminal understands escape sequences at all. This is a separate
+/// question from colour: a terminal can move the cursor perfectly well while
+/// being asked for monochrome, and conflating the two would strip a capable
+/// terminal of its cursor addressing just because NO_COLOR was set.
+static bool probe_ansi() {
+  const char* term = std::getenv("TERM");
+  if (term != nullptr && std::string_view(term) == "dumb") return false;
+  return STELLAR_ISATTY(STELLAR_FILENO(stdout)) != 0;
+}
+
 Theme Theme::detect(bool force_no_color) {
-  // NO_COLOR and --no-color are absolute: no escape sequence is emitted at all,
-  // not merely reduced to 16 colours.
-  if (force_no_color || env_requests_no_color()) return for_depth(ColorDepth::kNone);
-  // Not a terminal (piped, cron, CI): styling would be noise in a log file.
-  if (STELLAR_ISATTY(STELLAR_FILENO(stdout)) == 0) return for_depth(ColorDepth::kNone);
-  return for_depth(probe_depth());
+  Theme t;
+  t.ansi_ = probe_ansi();
+  // NO_COLOR and --no-color turn off colour only. The interface still draws
+  // with cursor addressing on a capable terminal; what it must never do is
+  // emit a colour sequence, and on a terminal that cannot address the cursor at
+  // all nothing is emitted either.
+  if (force_no_color || env_requests_no_color()) {
+    t.depth_ = ColorDepth::kNone;
+    return t;
+  }
+  if (!t.ansi_) {
+    t.depth_ = ColorDepth::kNone;
+    return t;
+  }
+  t.depth_ = probe_depth();
+  return t;
 }
 
 void Theme::append_sgr(std::string& out, Style style) const {
