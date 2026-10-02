@@ -123,7 +123,13 @@ std::vector<std::string> cells_of(const std::string& row) {
   }
   return cs;
 }
-inline constexpr std::string_view kBar = "\xe2\x94\x82";  // U+2502 box vertical
+/// Box-drawing glyphs as explicit UTF-8 bytes, never as `\u` escapes or raw
+/// characters: a `\u` escape in a narrow literal is encoded in the *execution*
+/// charset, which on MSVC is the local code page rather than UTF-8, so it would
+/// not compare equal to what the renderer emits.
+inline constexpr std::string_view kBar = "\xe2\x94\x82";          // U+2502 box vertical
+inline constexpr std::string_view kTopLeft = "\xe2\x94\x8c";      // U+250C box top-left
+inline constexpr std::string_view kBottomLeft = "\xe2\x94\x94";   // U+2514 box bottom-left
 
 AnalysisSnapshot loaded_snapshot() {
   AnalysisSnapshot s;
@@ -475,9 +481,9 @@ STELLAR_TEST(Tui, LayoutNeverEscapesItsContainer) {
           continue;
         }
         const auto top = cells_of(rows[0]);
-        EXPECT_TRUE(!top.empty() && top.front() == "\u250c");
+        EXPECT_TRUE(!top.empty() && top.front() == std::string(kTopLeft));
         const auto bottom = cells_of(rows[static_cast<std::size_t>(h) - 1]);
-        EXPECT_TRUE(!bottom.empty() && bottom.front() == "\u2514");
+        EXPECT_TRUE(!bottom.empty() && bottom.front() == std::string(kBottomLeft));
         // Rows 1..h-4 are content; h-3 is the separator, h-2 the footer.
         for (std::size_t r = 1; r + 3 < rows.size(); ++r) {
           const auto cs = cells_of(rows[r]);
@@ -565,7 +571,7 @@ STELLAR_TEST(Tui, AnsiTerminalsGetTheSameLayoutWithEraseSequences) {
         EXPECT_TRUE(stellar::tui::display_width(row) <= writable_cols(w));
       }
       const auto top = cells_of(rows[0]);
-      EXPECT_TRUE(!top.empty() && top.front() == "\u250c");
+      EXPECT_TRUE(!top.empty() && top.front() == std::string(kTopLeft));
       for (std::size_t r = 1; r + 3 < rows.size(); ++r) {
         const auto cs = cells_of(rows[r]);
         if (cs.empty()) continue;
