@@ -282,20 +282,33 @@ STELLAR_TEST(Tui, LayoutSurvivesHostileTerminalSizes) {
 }
 
 STELLAR_TEST(Tui, EveryScreenRendersItsTitle) {
+  // Every screen names itself. Where the shared logo header fits it supplies the
+  // name on the line under the banner and the border title is left empty; where
+  // it does not fit, the border title is the compact fallback. Either way the
+  // screen is identified, so this asserts both tiers rather than only the one
+  // the old border-title-only design produced.
   App app(Theme::for_depth(ColorDepth::kNone));
   const AnalysisSnapshot snap = loaded_snapshot();
-  struct Expect { ScreenId id; const char* title; };
+  struct Expect { ScreenId id; const char* title; const char* name; };
   const Expect expects[] = {
-      {ScreenId::kMain, "STELLAR"},
-      {ScreenId::kEmit, "STELLAR / EMIT"},
-      {ScreenId::kAnalysis, "STELLAR / ANALYSIS"},
-      {ScreenId::kComplete, "STELLAR / COMPLETE"},
-      {ScreenId::kSettings, "STELLAR / SETTINGS"},
-      {ScreenId::kInfo, "STELLAR / INFO"},
+      {ScreenId::kMain, "STELLAR", "Native ELF / DWARF Analysis"},
+      {ScreenId::kEmit, "STELLAR / EMIT", "Emit"},
+      {ScreenId::kAnalysis, "STELLAR / ANALYSIS", "Analysis"},
+      {ScreenId::kComplete, "STELLAR / COMPLETE", "Complete"},
+      {ScreenId::kSettings, "STELLAR / SETTINGS", "Settings"},
+      {ScreenId::kInfo, "STELLAR / INFO", "Inspect ELF / DWARF"},
+      {ScreenId::kUnits, "STELLAR / UNITS", "Compilation units"},
+      {ScreenId::kScan, "STELLAR / SCAN", "Scan DWARF"},
   };
   for (const Expect& e : expects) {
-    const std::string frame = app.render_frame_for_test(80, 24, snap, e.id);
-    EXPECT_TRUE(contains(frame, e.title));
+    // Too small for the banner: the border title names the screen.
+    EXPECT_TRUE(contains(app.render_frame_for_test(44, 12, snap, e.id), e.title));
+    // Room for the banner: the artwork, then the name beneath it. 80x32, not
+    // 80x24, because at 80x24 the header does not fit alongside three of the
+    // screens' content and those fall back to the border title.
+    const std::string big = app.render_frame_for_test(80, 32, snap, e.id);
+    EXPECT_TRUE(contains(big, std::string(stellar::tui::kLogoLines[0])));
+    EXPECT_TRUE(contains(big, e.name));
   }
 }
 
@@ -335,10 +348,12 @@ STELLAR_TEST(Tui, NeverFabricatesUnmeasuredValues) {
     EXPECT_FALSE(contains(frame, "20,454,580"));
     EXPECT_FALSE(contains(frame, "1183"));
   }
-  // The empty state must still show its structure, not fall over.
+  // The empty state must still show its structure, not fall over. 80x32 is used
+  // rather than 80x24 because the shared banner header only leaves the
+  // FILE INFORMATION block on screen at the taller size; asserting the em dash
+  // at a height where the block is legitimately dropped was asserting nothing.
   const std::string main_screen =
-      app.render_frame_for_test(80, 24, empty, ScreenId::kMain);
-  EXPECT_TRUE(contains(main_screen, "STELLAR"));
+      app.render_frame_for_test(80, 32, empty, ScreenId::kMain);
   // The placeholder for an unknown value is the em dash, not a number.
   EXPECT_TRUE(contains(main_screen, "\xE2\x80\x94"));  // U+2014 em dash
 }
@@ -387,18 +402,20 @@ STELLAR_TEST(Tui, FooterMatchesThePanelAndKeepsTheWayOut) {
       lines_of(app.render_frame_for_test(80, 24, snap, ScreenId::kMain));
   const std::string& input_footer = input_rows[input_rows.size() - 2];
   EXPECT_TRUE(contains(input_footer, "Run"));
-  EXPECT_TRUE(contains(input_footer, "Menu"));
+  EXPECT_TRUE(contains(input_footer, "Switch Panel"));
   EXPECT_TRUE(contains(input_footer, "Quit"));
   EXPECT_FALSE(contains(input_footer, "Settings"));
 
   // Menu panel: every shortcut the main screen has, and all of them fit at the
-  // 80 columns the spec draws the footer at.
+  // 80 columns the spec draws the footer at. "Help" rather than "Settings": the
+  // main screen advertises "?" for the overlay, and Settings is reached from the
+  // menu itself rather than from a one-key shortcut.
   app.handle_key_for_test(stellar::tui::Event{stellar::tui::Key::kTab, {}});
   const auto menu_rows =
       lines_of(app.render_frame_for_test(80, 24, snap, ScreenId::kMain));
   const std::string& menu_footer = menu_rows[menu_rows.size() - 2];
-  for (const char* word : {"Navigate", "Select", "Switch Panel", "Run",
-                           "Settings", "Quit"}) {
+  for (const char* word : {"Navigate", "Select", "Switch Panel", "Run", "Help",
+                           "Quit"}) {
     EXPECT_TRUE(contains(menu_footer, word));
   }
   EXPECT_TRUE(stellar::tui::display_width(menu_footer) <= writable_cols(80));
@@ -525,25 +542,30 @@ STELLAR_TEST(Tui, LongPathsStayInsideTheirField) {
 STELLAR_TEST(Tui, ButtonsShareOneColumn) {
   // The complete screen's buttons are a group and must line up. Centring each
   // label on its own width -- the original bug -- puts them in a staircase.
+  //
+  // The column is measured in *display columns*, not bytes. The selected button
+  // is prefixed with the "▶" marker, which is three UTF-8 bytes but one column,
+  // so comparing find() offsets reported a staircase for buttons that are in fact
+  // aligned. That was a bug in this test, not in the layout.
   App app(Theme::for_depth(ColorDepth::kNone));
   AnalysisSnapshot snap = loaded_snapshot();
   snap.phase = AnalysisSnapshot::Phase::kDone;
   snap.out_path = "output/dump.cs";
   const std::string frame = app.render_frame_for_test(80, 24, snap, ScreenId::kComplete);
   const auto rows = lines_of(frame);
-  std::size_t first = std::string::npos, second = std::string::npos;
-  for (std::size_t r = 0; r < rows.size(); ++r) {
-    const std::size_t at = rows[r].find('[');
+  std::vector<int> columns;
+  for (const std::string& row : rows) {
+    const std::size_t at = row.find('[');
     if (at == std::string::npos) continue;
-    if (first == std::string::npos) {
-      first = at;
-    } else if (second == std::string::npos) {
-      second = at;
-      break;
-    }
+    columns.push_back(
+        static_cast<int>(stellar::tui::display_width(row.substr(0, at))));
+    if (columns.size() == 2) break;
   }
-  EXPECT_TRUE(first != std::string::npos && second != std::string::npos);
-  EXPECT_EQ(first, second);
+  EXPECT_TRUE(columns.size() == 2);
+  if (columns.size() == 2) {
+    // Every button starts at the same column, whatever its own width.
+    EXPECT_EQ(columns[0], columns[1]);
+  }
 }
 
 STELLAR_TEST(Tui, AnsiTerminalsGetTheSameLayoutWithEraseSequences) {
