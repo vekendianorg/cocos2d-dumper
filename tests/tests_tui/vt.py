@@ -21,6 +21,8 @@ class VT:
         s.pend = False
         s.scrolls = 0
         s.max_param_err = 0
+        s.bg = False
+        s.bg_cells = 0   # cells drawn with a background colour
     def lf(s):
         if s.y == s.r - 1:
             s.g.pop(0); s.g.append([" "] * s.c); s.scrolls += 1
@@ -33,6 +35,7 @@ class VT:
         if s.x + w > s.c:       # wide glyph does not fit: wrap
             s.x = 0; s.lf()
         s.g[s.y][s.x] = ch
+        if s.bg: s.bg_cells += 1
         if w == 2 and s.x + 1 < s.c: s.g[s.y][s.x + 1] = ""
         if s.x + w >= s.c: s.pend = True; s.x = s.c - 1
         else: s.x += w
@@ -45,6 +48,12 @@ class VT:
                 if not m: i += 1; continue
                 p, f = m.group(1), m.group(2)
                 a = [int(v) if v.isdigit() else 0 for v in p.replace("?", "").split(";")] if p else []
+                if f == "m":
+                    for v in (a or [0]):
+                        if v == 0 or v == 49: s.bg = False
+                        elif 40 <= v <= 47 or 100 <= v <= 107: s.bg = True
+                        elif v == 7: s.bg = True      # reverse video counts too
+                        elif v == 27: s.bg = False
                 if f == "H":
                     s.y = min(s.r - 1, max(0, (a[0] if a and a[0] else 1) - 1))
                     s.x = min(s.c - 1, max(0, (a[1] if len(a) > 1 and a[1] else 1) - 1)); s.pend = False
@@ -61,14 +70,16 @@ class VT:
             i += 1
     def rows(s): return ["".join(r) for r in s.g]
 
-SCREENS_TITLE = ["STELLAR", "STELLAR / EMIT", "STELLAR / ANALYSIS", "STELLAR / COMPLETE", "STELLAR / SETTINGS", "STELLAR / INFO"]
-SCREENS = ["main", "emit", "analysis", "complete", "settings", "info"]
+SCREENS_TITLE = ["STELLAR", "STELLAR / EMIT", "STELLAR / ANALYSIS", "STELLAR / COMPLETE", "STELLAR / SETTINGS", "STELLAR / INFO", "STELLAR / UNITS", "STELLAR / SCAN"]
+SCREENS = ["main", "emit", "analysis", "complete", "settings", "info", "units", "scan"]
+LOGO0 = "███████╗████████╗"
 MIN_C, MIN_R = 30, 10   # below this the app must show the "too small" fallback
 
 def check(c, r, sid, data):
     errs = []
     vt = VT(c, r); vt.feed(data)
     g = vt.rows()
+    if vt.bg_cells > 1: errs.append(f"selection drawn as a filled highlight ({vt.bg_cells} cells with a background)")
     if vt.scrolls: errs.append(f"scrolled {vt.scrolls}x (frame taller than screen / wrapped)")
     if c >= MIN_C and r >= MIN_R:
         if g[0][0] != "┌": errs.append("top-left corner missing")
@@ -84,6 +95,21 @@ def check(c, r, sid, data):
         for y in range(1, r - 1):
             if g[y][c-2] not in "│┤": errs.append(f"right border broken row {y}: {g[y][c-4:]!r}"); break
         if any(g[y][c-1].strip() for y in range(r)): errs.append("last column written")
+        # header: the logo is on every screen it fits on; with it, no border title
+        t = SCREENS_TITLE[sid]; at = g[0].find(t)
+        li = next((i for i, l in enumerate(g) if LOGO0 in l), None)
+        want = (c - 1) / 2
+        if li is not None:
+            if at >= 0: errs.append("border title shown next to the banner")
+            lc = g[li].find(LOGO0)
+            if abs(lc + 57 / 2 - want) > 1.01: errs.append("banner not centred")
+            sub = g[li + 6].strip() if li + 6 < r else ""
+            if not sub: errs.append("no line under the banner")
+            elif abs(g[li + 6].find(sub) + len(sub) / 2 - want) > 1.01: errs.append("subtitle not centred")
+            if li != 1: errs.append(f"banner not at the top (row {li})")
+        else:
+            if at < 0: errs.append("no banner and no title")
+            elif at != 2: errs.append("fallback title not at the top-left corner")
     else:
         txt = " ".join(x.strip() for x in g).strip()
         if not txt: errs.append("tiny size: blank screen (no fallback message)")

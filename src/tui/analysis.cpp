@@ -24,6 +24,30 @@
 #include "stellar/util/bytes.h"
 
 namespace stellar::tui {
+
+FileFacts probe_file(const std::string& path, std::string* error) {
+  FileFacts f;
+  elf::ElfFile elf;
+  std::string err;
+  if (!elf.open(path, &err)) {
+    if (error != nullptr) *error = err;
+    return f;
+  }
+  f.valid = true;
+  f.path = elf.path();
+  f.format = elf.describe();
+  f.machine = elf::machine_name(elf.header().e_machine);
+  f.size_text = util::human_size(elf.file_size());
+  f.file_size = elf.file_size();
+  f.endianness = elf.is_little_endian() ? "little" : "big";
+  dwarf::DwarfContext ctx(elf);
+  const dwarf::Sections& sec = ctx.sections();
+  f.unit_total = ctx.unit_count();
+  f.has_dwarf = sec.has_info() && f.unit_total != 0;
+  f.dwarf_summary = sec.capability_report();
+  f.debug_sections = sec.present_debug_sections();
+  return f;
+}
 namespace {
 
 /// How often the live counters are read back, in milliseconds.
@@ -310,6 +334,8 @@ void Analysis::run(StartOptions o) {
   };
 
   const auto cancelled = [this] { return cancel_.load(std::memory_order_relaxed); };
+  std::atomic<bool> over_ram{false};
+  const std::uint64_t ram_cap = o.ram_limit_bytes;
 
   /// Reaches a terminal phase and, unless the run completed, throws away the
   /// half-written dump.
@@ -358,7 +384,22 @@ void Analysis::run(StartOptions o) {
       const std::string core_stage = parse_stage(line);
       s.current_note = core_stage.empty() ? std::move(note) : core_stage;
       s.rss_bytes = diag::current_rss_bytes();
+      if (ram_cap != 0 && s.rss_bytes > ram_cap && !over_ram.exchange(true)) {
+        cancel_.store(true);  // the existing cancel path unwinds the run and removes the partial file
+      }
     });
+  };
+
+  // A cancel the user asked for, versus one the RAM cap triggered: the second is
+  // a failure with a reason, not something the user did.
+  const auto settle_cancelled = [&]() {
+    if (over_ram.load()) {
+      settle(AnalysisSnapshot::Phase::kFailed,
+             "stopped: memory passed the " + util::human_size(ram_cap) +
+                 " limit (Settings > RAM Limit)");
+    } else {
+      settle(AnalysisSnapshot::Phase::kCancelled, {});
+    }
   };
 
   // The work itself is a lambda so that every early return still falls through
@@ -388,7 +429,7 @@ void Analysis::run(StartOptions o) {
       s.file.endianness = elf.is_little_endian() ? "little" : "big";
     });
     if (cancelled()) {
-      settle(AnalysisSnapshot::Phase::kCancelled, {});
+      settle_cancelled();
       return;
     }
 
@@ -446,7 +487,7 @@ void Analysis::run(StartOptions o) {
                std::to_string(unit_total));
       }
       if (cancelled()) {
-        settle(AnalysisSnapshot::Phase::kCancelled, {});
+        settle_cancelled();
         return;
       }
     }
@@ -488,7 +529,7 @@ void Analysis::run(StartOptions o) {
     count("type_nodes", model.types.size());
     sample("model built");
     if (cancelled()) {
-      settle(AnalysisSnapshot::Phase::kCancelled, {});
+      settle_cancelled();
       return;
     }
 
@@ -540,7 +581,7 @@ void Analysis::run(StartOptions o) {
     // A cancel that lands during the emitter still discards the output: half a
     // dump is worse than none, because nothing in the file name says so.
     if (cancelled()) {
-      settle(AnalysisSnapshot::Phase::kCancelled, {});
+      settle_cancelled();
       return;
     }
     if (std::rename(partial.c_str(), out_path.c_str()) != 0) {

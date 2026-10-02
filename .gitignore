@@ -22,6 +22,10 @@ compile_commands.json
 *.ilk
 *.exp
 
+# --- temporary files ---
+/temp/
+TODO.md
+
 # ---- generated dumps: hundreds of MB, regenerate with `stellar emit` ----
 # Dumps are not source, so *.cs is ignored wholesale; the format reference
 # that used to live here as a 58 MB .c file is not carried in the repository.

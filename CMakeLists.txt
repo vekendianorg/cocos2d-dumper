@@ -81,6 +81,7 @@ add_library(stellar STATIC
   src/tui/terminal.cpp
   src/tui/screen.cpp
   src/tui/analysis.cpp
+  src/tui/dwarfview.cpp
   src/tui/app.cpp
 )
 target_include_directories(stellar PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

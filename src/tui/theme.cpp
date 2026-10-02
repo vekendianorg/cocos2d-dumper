@@ -53,7 +53,7 @@ constexpr StyleSpec kSpec[] = {
     /* kHeader             */ {Color::kLightBlue, Bg::kNone, Attr::kBold},
     /* kLabel              */ {Color::kGray, Bg::kNone, R},
     /* kValue              */ {Color::kWhite, Bg::kNone, R},
-    /* kSelected           */ {Color::kWhite, Bg::kBlue, Attr::kBold},
+    /* kSelected           */ {Color::kLightBlue, Bg::kNone, Attr::kBold},
     /* kFocused            */ {Color::kLightBlue, Bg::kNone, Attr::kBold},
     /* kAccent             */ {Color::kLightBlue, Bg::kNone, Attr::kBold},
     /* kSuccess            */ {Color::kGreen, Bg::kNone, Attr::kBold},
@@ -74,12 +74,13 @@ constexpr StyleSpec kSpec[] = {
     /* kCheckboxOn         */ {Color::kLightBlue, Bg::kNone, Attr::kBold},
     /* kCheckboxOff        */ {Color::kGray, Bg::kNone, R},
     /* kButton             */ {Color::kWhite, Bg::kNone, R},
-    /* kButtonSelected     */ {Color::kWhite, Bg::kBlue, Attr::kBold},
+    /* kButtonSelected     */ {Color::kLightBlue, Bg::kNone, Attr::kBold},
+    /* kCaret              */ {Color::kWhite, Bg::kBlue, Attr::kBold},
 };
 
 constexpr std::size_t kSpecCount = sizeof(kSpec) / sizeof(kSpec[0]);
 
-static_assert(kSpecCount == static_cast<std::size_t>(Style::kButtonSelected) + 1,
+static_assert(kSpecCount == static_cast<std::size_t>(Style::kCaret) + 1,
               "kSpec must cover every Style value, in order");
 
 

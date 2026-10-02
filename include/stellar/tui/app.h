@@ -14,12 +14,16 @@
 // to something real.
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 
+#include <unordered_map>
+
 #include "stellar/tui/analysis.h"
+#include "stellar/tui/dwarfview.h"
 #include "stellar/tui/screen.h"
 #include "stellar/tui/terminal.h"
 #include "stellar/tui/theme.h"
@@ -37,7 +41,7 @@ class App {
   /// Every screen the TUI has. The set is fixed on purpose: TODO.md asks for a
   /// stable navigation structure so later features can be added without
   /// redesigning how the user moves around.
-  enum class ScreenId { kMain, kEmit, kAnalysis, kComplete, kSettings, kInfo };
+  enum class ScreenId { kMain, kEmit, kAnalysis, kComplete, kSettings, kInfo, kUnits, kScan };
 
   /// The smallest terminal the screens are laid out for. Anything smaller gets
   /// the single "terminal too small" notice instead of a squashed, wrapped
@@ -76,11 +80,20 @@ class App {
 
   /// Seeds the editable input path and the derived output path.
   void set_input_path_for_test(std::string path);
+  /// Runs the startup autofill against `dir` instead of the real cwd.
+  void autofill_input_for_test(const std::string& dir) { autofill_input(dir); }
   /// Sets the emit toggles (methods / padding / unit information).
   void set_emit_options_for_test(bool methods, bool pad_layout, bool build_units);
   /// Feeds one decoded key through the same handler the event loop calls, so
   /// navigation can be proven without a terminal.
   void handle_key_for_test(const Event& e) { handle_key(e); }
+  /// Runs the file check on the current input at once (the loop debounces it).
+  void probe_now_for_test() { run_probe(); }
+  [[nodiscard]] const std::string& ghost_for_test() const noexcept { return ghost_; }
+  void set_help_for_test(bool on) { help_ = on; }
+  /// Seeds the unit browser / scan screens with data, so they can be laid out.
+  void set_units_for_test(UnitList u) { units_ = std::move(u); units_sel_ = 0; }
+  void set_scan_for_test(ScanSnapshot s) { scan_snap_ = std::move(s); }
 
  private:
 
@@ -113,11 +126,11 @@ class App {
 
   /// Focusable rows of the emit screen, in draw order.
   enum class EmitItem : std::uint8_t {
+    kOutPath,   // first: it is the first thing drawn, so focus order = draw order
     kMethods,
     kPadding,
     kUnits,
     kMaxLines,
-    kOutPath,
     kStart,
     kCount,
   };
@@ -132,8 +145,16 @@ class App {
     int bottom = 0;  ///< one past the last row inside the frame
     int left = 0;    ///< first column inside the frame
     int width = 0;   ///< usable columns
+    bool headed = false;  ///< the logo header took the rows above `top`
   };
   [[nodiscard]] static Region content_region(int cols, int rows) noexcept;
+  /// Rows the shared logo header takes on `id` at this size: 0 when the
+  /// terminal is too small to show it *and* the screen's own content.
+  [[nodiscard]] static int header_rows(int cols, int rows, ScreenId id) noexcept;
+  /// The line under the logo: the tagline on the main screen, the screen's name
+  /// everywhere else.
+  [[nodiscard]] std::string screen_subtitle() const;
+  void draw_header(Screen& s, const Region& base, int rows) const;
 
   // --- painting -------------------------------------------------------------
   //
@@ -148,6 +169,8 @@ class App {
   void paint_complete(Screen& s, const Region& r) const;
   void paint_settings(Screen& s, const Region& r) const;
   void paint_info(Screen& s, const Region& r) const;
+  void paint_units(Screen& s, const Region& r) const;
+  void paint_scan(Screen& s, const Region& r) const;
   /// Fallback for terminals below kMinCols x kMinRows. Draws no frame, and
   /// degrades to shorter wording rather than ever overflowing the grid.
   void paint_too_small(Screen& s) const;
@@ -156,7 +179,7 @@ class App {
   void draw_logo(Screen& s, int row, int col) const;
   /// An editable field: prompt, text and a block cursor.
   void draw_field(Screen& s, int row, int col, int width, const Field& f,
-                  std::string_view prompt, bool caret) const;
+                  std::string_view prompt, bool caret, std::string_view ghost = {}) const;
 
   // --- input ----------------------------------------------------------------
 
@@ -165,6 +188,12 @@ class App {
   void handle_emit_key(const Event& e);
   void handle_settings_key(const Event& e);
   void handle_complete_key(const Event& e);
+  void handle_units_key(const Event& e);
+  void handle_scan_key(const Event& e);
+  /// Lists the compilation units of the (valid) input and opens the browser.
+  void open_units();
+  void start_scan();
+  [[nodiscard]] int list_rows() const noexcept { return list_rows_; }
   /// Text editing for whichever field has the caret. True when consumed.
   bool field_key(Field& f, const Event& e);
   void field_insert(Field& f, std::string_view utf8);
@@ -192,6 +221,22 @@ class App {
   void apply_settings();
   /// Re-derives the output path from the output directory setting.
   void sync_output_path();
+  /// Everything that must follow a change to the input path: the derived output
+  /// path, the inline completion and (debounced, or at once) the file check.
+  void on_input_changed(bool immediate);
+  /// Opens the typed path the way a run would and records what is wrong with it.
+  void run_probe();
+  void update_ghost();
+  /// The text that would complete `text` to an existing path, or empty.
+  [[nodiscard]] static std::string path_suggestion(const std::string& text);
+  /// `~` and `~/x` expanded against $HOME; anything else unchanged.
+  [[nodiscard]] static std::string expand_home(const std::string& text);
+  /// True while a text field owns the keyboard (printable keys are text).
+  [[nodiscard]] bool text_focus() const noexcept;
+  void paint_help(Screen& s, const Region& r) const;
+  void paint_status(Screen& s) const;
+  /// Prefills the input from `dir`: the one ELF in it, else `dir/`.
+  void autofill_input(const std::string& dir);
   /// Resizes both grids and forces a full repaint.
   void layout();
   /// Recomputes the field scroll offsets before a paint.
@@ -214,8 +259,8 @@ class App {
 
   // main
   Field input_;
-  int main_panel_ = 0;  ///< 0 = the input field, 1 = the action menu
-  int main_item_ = 0;   ///< selected action, 0..3
+  int main_panel_ = 0;  ///< 0 = input field, 1 = action menu, 2 = output path
+  int main_item_ = 0;   ///< selected action, 0..4
 
   // emit
   bool opt_methods_ = true;
@@ -226,13 +271,15 @@ class App {
   Field max_lines_edit_;         ///< scratch buffer while the limit is edited
   int emit_item_ = 0;
   bool editing_out_ = false;
+  bool out_custom_ = false;  ///< the user typed the path; stop re-deriving it
+  std::string out_saved_;    ///< restored when an output-path edit is cancelled
   bool editing_max_lines_ = false;
 
   // settings
   int redraw_ms_ = 80;
   int progress_mode_ = 0;  ///< 0 auto, 1 always, 2 never
-  int threads_limit_ = 16;   ///< displayed, never applied
-  int ram_limit_mb_ = 8192;  ///< displayed, never applied
+  int threads_limit_ = 16;   ///< editable, but the core is single-threaded
+  int ram_limit_mb_ = 8192;  ///< soft cap on a run's resident memory; 0 = off
   bool adaptive_ = true;     ///< displayed, never applied
   bool parallel_ = true;     ///< displayed, never applied
   Field out_dir_;
@@ -240,7 +287,33 @@ class App {
   int setting_ = 0;
   bool editing_interval_ = false;
   bool editing_dir_ = false;
+  bool editing_threads_ = false;
+  bool editing_ram_ = false;
   Field interval_edit_;
+  Field threads_edit_;
+  Field ram_edit_;
+
+  // live input check and inline completion
+  FileFacts live_facts_;        ///< what the typed path opens as (valid=false if not)
+  std::string path_note_;       ///< why it does not ("" = fine or nothing typed)
+  bool probe_pending_ = false;  ///< an edit has not been checked yet
+  std::chrono::steady_clock::time_point probe_due_{};
+  std::string ghost_;           ///< suggested completion, accepted with Right
+
+  // browse compilation units / scan DWARF
+  UnitList units_;
+  int units_sel_ = 0;
+  std::unordered_map<std::uint64_t, std::uint64_t> unit_dies_;  ///< lazily counted
+  ScanJob scan_;
+  ScanSnapshot scan_snap_;
+  bool watching_scan_ = false;
+  int scan_scroll_ = 0;
+  mutable int list_rows_ = 10;  ///< rows the last list paint had; sizes PgUp/PgDn
+
+  // confirmations
+  bool overwrite_armed_ = false;  ///< the next start request overwrites
+  bool cancel_armed_ = false;     ///< the next cancel request really cancels
+  bool help_ = false;
 
   // completion
   int complete_item_ = 0;

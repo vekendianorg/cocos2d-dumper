@@ -57,7 +57,7 @@ std::size_t codepoint_len(std::string_view s, std::size_t i) noexcept {
 /// but silently losing colour is worse than falling back to white).
 Style sanitize(Style st) noexcept {
   const auto i = static_cast<unsigned>(st);
-  return i <= static_cast<unsigned>(Style::kButtonSelected) ? st
+  return i <= static_cast<unsigned>(Style::kCaret) ? st
                                                            : Style::kValue;
 }
 

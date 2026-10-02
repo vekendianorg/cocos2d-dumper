@@ -88,7 +88,8 @@ enum class Style : std::uint8_t {
   kCheckboxOn,         ///< Light Blue + Bold  ([x])
   kCheckboxOff,        ///< Gray + Regular      ([ ])
   kButton,             ///< White + Regular
-  kButtonSelected,     ///< White on Blue + Bold
+  kButtonSelected,     ///< Bold light blue, drawn between ▶ ◀ markers (no background)
+  kCaret,              ///< White on Blue, ONE cell: the text cursor, the only background in the UI
 };
 
 /// Background colours a style can request. Only the selection highlight uses

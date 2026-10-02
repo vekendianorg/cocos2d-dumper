@@ -52,6 +52,12 @@ struct FileFacts {
   std::vector<std::pair<std::string, std::uint64_t>> debug_sections;
 };
 
+/// Opens `path` the way a run would and reports what the readers see, without
+/// starting a run. Cheap (the file is mapped, not read): the TUI uses it to
+/// validate the input as it is typed. On failure `valid` is false and `*error`
+/// (when given) says why, in words a user can act on.
+[[nodiscard]] FileFacts probe_file(const std::string& path, std::string* error = nullptr);
+
 /// The worker's whole observable state, as one copyable value.
 struct AnalysisSnapshot {
   enum class Phase : std::uint8_t {
@@ -131,6 +137,9 @@ class Analysis {
     /// "auto" | "dwarf" | "dwarfless"; "auto" picks dwarfless when the input
     /// has no .debug_info, exactly as `stellar emit --mode=auto` does.
     std::string mode = "auto";
+    /// Soft cap on resident memory, checked on every progress tick: a run that
+    /// passes it is stopped and reported as failed. 0 = no cap.
+    uint64_t ram_limit_bytes = 0;
   };
 
   Analysis() = default;
